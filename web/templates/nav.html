@@ -1,0 +1,32 @@
+{{define "content"}}
+
+<section class="hero hero-home" id="hero" style="--home-image:url(/static/img/monet-parasol.png?v={{.Ver}})">
+  <button id="bg-upload" class="hero-btn" type="button" aria-label="更换背景图" title="更换背景图">
+    <span class="ti" style="--icon:url(/static/vendor/bootstrap-icons/images.svg?v={{.Ver}})" aria-hidden="true"></span>
+  </button>
+  <h1 class="home-title"><span class="home-wordmark">主页</span></h1>
+</section>
+
+<section class="gallery" aria-label="导航">
+  <h2 class="gallery-title">应用</h2>
+  <ol class="placards">
+    {{range .Items}}
+    <li>
+      <a class="placard" href="{{.Href}}">
+        <span class="icon-chip" style="--accent:{{.Accent}};--icon:url(/static/img/{{.Icon}}.svg?v={{$.Ver}})" aria-hidden="true"></span>
+        <span class="placard-body">
+          <span class="placard-title">{{.Name}}</span>
+        </span>
+      </a>
+    </li>
+    {{end}}
+  </ol>
+</section>
+{{end}}
+
+{{define "extra_head"}}<link rel="stylesheet" href="/static/vendor/cropper/cropper.min.css?v={{.Ver}}">{{end}}
+
+{{define "page_scripts"}}
+<script src="/static/vendor/cropper/cropper.min.js?v={{.Ver}}"></script>
+<script src="/static/js/nav.js?v={{.Ver}}"></script>
+{{end}}

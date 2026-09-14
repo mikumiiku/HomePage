@@ -1,0 +1,47 @@
+{{define "layout"}}<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{.Title}} · 主页</title>
+<meta name="description" content="主页：自制小应用与工具的入口。目前有九个自制小游戏，进度保存在你自己的设备上。">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23306838'/><text x='50' y='70' font-size='52' text-anchor='middle'>🏠</text></svg>">
+<script>
+(function () {
+  try {
+    var d = JSON.parse(localStorage.getItem('homepage:e1:app:appearance') || 'null');
+    var saved = d && d.d && d.d.theme;
+    var t = (saved === 'dark' || saved === 'light') ? saved
+      : ((window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light');
+    document.documentElement.dataset.theme = t;
+  } catch (e) { /* 无存储时跟随亮色 */ }
+})();
+</script>
+<link rel="stylesheet" href="/static/css/home.css?v={{.Ver}}">
+{{block "extra_head" .}}{{end}}
+</head>
+<body{{if eq .Title "主页"}} class="is-home"{{else if eq .Title "AI 对话"}} class="is-chat"{{else if eq .Game.ID "gomoku"}} class="is-gomoku"{{else if eq .Game.ID "go"}} class="is-go"{{end}}>
+<header class="site-header">
+  {{if ne .Title "主页"}}<a class="brand home-wordmark" href="/">主页</a>{{end}}
+  <div class="header-actions"><nav class="site-nav" aria-label="主导航"><a href="/about" {{if eq .Title "关于"}}aria-current="page"{{end}}>关于</a></nav>
+  <button id="theme-toggle" class="theme-toggle" type="button" aria-label="切换亮暗模式" title="切换亮暗模式">
+    <span class="ti ti-moon" style="--icon:url(/static/vendor/bootstrap-icons/moon-stars.svg?v={{.Ver}})" aria-hidden="true"></span>
+    <span class="ti ti-sun" style="--icon:url(/static/vendor/bootstrap-icons/sun.svg?v={{.Ver}})" aria-hidden="true"></span>
+  </button></div>
+</header>
+<main class="page">
+{{block "content" .}}{{end}}
+</main>
+<footer class="site-footer">
+  <p>游戏图标来自 <a href="https://game-icons.net/" rel="noopener">game-icons.net</a>（Lorc、Delapouite、Faithtoken、Skoll，CC BY 3.0）。</p>
+</footer>
+{{block "scripts" .}}{{end}}
+</body>
+</html>{{end}}
+
+{{define "scripts"}}
+<script src="/static/js/core/store.js?v={{.Ver}}"></script>
+<script src="/static/js/core/schemas.js?v={{.Ver}}"></script>
+<script src="/static/js/core/common.js?v={{.Ver}}"></script>
+{{block "page_scripts" .}}{{end}}
+{{end}}

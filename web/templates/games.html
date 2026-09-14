@@ -1,0 +1,44 @@
+{{define "content"}}
+
+<section class="hero">
+  <div class="hero-copy rise d0">
+    <h1>小游戏</h1>
+  </div>
+</section>
+
+
+
+<section id="recent-strip" class="recent" hidden>
+  <span class="recent-label">最近玩过</span>
+  <div id="recent-list" class="recent-list"></div>
+</section>
+
+<section class="gallery" aria-label="游戏列表">
+  <h2 class="gallery-title">全部游戏</h2>
+  <ol class="placards">
+    {{range .Games}}
+    <li>
+      <a class="placard" href="/game/{{.ID}}" data-game-id="{{.ID}}">
+        <span class="icon-chip" style="--accent:{{.Accent}};--icon:url(/static/img/{{.Icon}}.svg?v={{$.Ver}})" aria-hidden="true"></span>
+        <span class="placard-body">
+          <span class="placard-title">{{.Title}}</span>
+          <span class="placard-tagline">{{.Tagline}}</span>
+          <span class="placard-meta">
+            <span>{{.DeviceLabel}}</span>
+            <span class="best-line" data-best>本地最佳 —</span>
+          </span>
+        </span>
+      </a>
+    </li>
+    {{else}}
+    <li><p class="empty">暂无适合当前设备的游戏。</p></li>
+    {{end}}
+  </ol>
+</section>
+
+<script>window.GAMES_META = {{$.GamesMeta}};</script>
+{{end}}
+
+{{define "page_scripts"}}
+<script src="/static/js/games.js?v={{.Ver}}"></script>
+{{end}}

@@ -1,0 +1,60 @@
+{{define "extra_head"}}<link rel="stylesheet" href="/static/css/chat.css?v={{.Ver}}"><meta name="referrer" content="no-referrer">{{end}}
+{{define "content"}}
+<section class="chat-app" aria-label="AI 对话">
+  <aside class="chat-sidebar" id="chat-sidebar">
+    <div class="chat-sidebar-head"><h1>AI 对话</h1><button class="chat-icon chat-mobile" id="chat-close-history" type="button" aria-label="关闭历史对话"><i class="ti" style="--icon:url(/static/vendor/bootstrap-icons/x-lg.svg)" aria-hidden="true"></i></button></div>
+    <button class="btn primary chat-new" id="chat-new" type="button"><i class="ti" style="--icon:url(/static/vendor/bootstrap-icons/plus.svg)" aria-hidden="true"></i>新建对话</button>
+    <p class="chat-list-label">最近对话</p>
+    <nav id="chat-history" class="chat-history" aria-label="历史对话"></nav>
+    <div class="chat-sidebar-foot"><button class="chat-text chat-settings-link" id="chat-sidebar-settings" type="button"><i class="ti" style="--icon:url(/static/vendor/bootstrap-icons/gear.svg)" aria-hidden="true"></i>设置</button></div>
+  </aside>
+  <div class="chat-main">
+    <header class="chat-topbar">
+      <button class="chat-icon chat-mobile" id="chat-open-history" type="button" aria-label="打开历史对话" aria-controls="chat-sidebar" aria-expanded="false"><i class="ti" style="--icon:url(/static/vendor/bootstrap-icons/list.svg)" aria-hidden="true"></i></button>
+      <div class="chat-top-title"><strong id="chat-title">新对话</strong><span id="chat-provider-label">尚未配置模型</span></div>
+
+    </header>
+    <p id="chat-storage-error" class="chat-alert" role="alert" hidden></p>
+    <div class="chat-scroll" id="chat-scroll" tabindex="0" aria-label="消息阅读区">
+      <div class="chat-welcome" id="chat-welcome"><i class="ti chat-welcome-icon" style="--icon:url(/static/vendor/bootstrap-icons/chat-left-text.svg)" aria-hidden="true"></i><h2>有什么想聊的？</h2><p>随时提问、交流想法，开始一段对话。</p></div>
+      <div class="chat-messages" id="chat-messages" aria-label="对话内容"></div>
+    </div>
+    <div class="chat-compose-wrap">
+      <div id="chat-error" class="chat-alert" role="alert" hidden><span></span><button id="chat-retry" class="chat-text" type="button">重试回复</button></div>
+      <button id="chat-jump" class="chat-text chat-jump" type="button" hidden aria-label="回到最新回复"><i class="ti" style="--icon:url(/static/vendor/bootstrap-icons/chevron-down.svg)" aria-hidden="true"></i>最新回复</button>
+      <form id="chat-compose" class="chat-compose" novalidate>
+        <label class="chat-sr" for="chat-input">消息内容</label><textarea class="resize-none" id="chat-input" rows="1" maxlength="100000" placeholder="输入消息…" aria-describedby="chat-compose-hint"></textarea>
+        <div class="chat-compose-bottom"><div class="chat-compose-tools"><label class="chat-model-picker"><span class="chat-sr">模型</span><select id="chat-profile-select" aria-label="模型"><option value="">选择模型</option></select></label><label class="chat-effort-picker"><span class="chat-sr">思考等级</span><select id="chat-effort-select" aria-label="思考等级" title="模型不支持所选等级时，请选择默认"><option value="">默认</option><option>low</option><option>medium</option><option>high</option><option>xhigh</option><option>max</option></select></label></div><button id="chat-send" class="btn primary" type="submit">发送<i class="ti" style="--icon:url(/static/vendor/bootstrap-icons/send.svg)" aria-hidden="true"></i></button><button id="chat-stop" class="btn" type="button" hidden>停止生成<i class="ti" style="--icon:url(/static/vendor/bootstrap-icons/stop-fill.svg)" aria-hidden="true"></i></button></div>
+      </form>
+      <div class="chat-compose-hint" id="chat-compose-hint"><span id="chat-status" class="chat-sr" role="status" aria-live="polite"></span><span class="chat-shortcut">Enter 发送 · Shift + Enter 换行</span></div>
+    </div>
+  </div>
+</section>
+<dialog id="chat-settings" class="chat-dialog chat-settings" aria-labelledby="chat-settings-title">
+  <div class="chat-dialog-heading"><div><h2 id="chat-settings-title">设置</h2><p>连接模型服务，管理对话偏好和本地记录。</p></div><button class="chat-icon" id="chat-settings-close" type="button" aria-label="关闭设置"><i class="ti" style="--icon:url(/static/vendor/bootstrap-icons/x-lg.svg)" aria-hidden="true"></i></button></div>
+  <div class="chat-settings-content">
+  <form id="chat-settings-form" novalidate>
+    <section class="chat-settings-section" aria-labelledby="chat-service-title">
+      <div class="chat-section-heading"><h3 id="chat-service-title">模型服务</h3><button class="chat-text" id="chat-add-profile" type="button"><i class="ti" style="--icon:url(/static/vendor/bootstrap-icons/plus.svg)" aria-hidden="true"></i>添加连接</button></div>
+      <div id="chat-saved-connections" class="chat-saved-connections"><label for="chat-config-select">已保存的连接</label><div class="chat-connection-row"><select id="chat-config-select"></select><button id="chat-delete-profile" class="chat-icon" type="button" aria-label="删除连接" title="删除连接"><i class="ti" style="--icon:url(/static/vendor/bootstrap-icons/trash.svg)" aria-hidden="true"></i></button></div></div>
+      <label for="chat-config-base">Base URL</label><input id="chat-config-base" type="url" spellcheck="false" autocomplete="off" placeholder="https://api.example.com/v1" aria-describedby="chat-config-help">
+      <p class="chat-field-help" id="chat-config-help">填写服务商提供的基础地址，保留 /v1 等路径。</p>
+      <label for="chat-config-key">API Key</label><div class="chat-key-field"><input id="chat-config-key" type="password" autocomplete="off" spellcheck="false" placeholder="输入 API Key，本地服务可留空"><button id="chat-key-toggle" class="chat-icon" type="button" aria-label="显示密钥" aria-pressed="false"><i class="ti" style="--icon:url(/static/vendor/bootstrap-icons/eye.svg)" aria-hidden="true"></i></button></div>
+      <div class="chat-connect-row"><p>连接后自动获取模型列表。地址和密钥仅保存在此浏览器。</p><button id="chat-connect" class="btn primary" type="submit">连接</button></div>
+      <p id="chat-config-error" class="chat-alert" role="alert" hidden></p>
+      <div class="chat-connection-status" id="chat-connection-status" role="status" aria-live="polite"><i class="ti" style="--icon:url(/static/vendor/bootstrap-icons/check2.svg)" aria-hidden="true"></i><div><strong id="chat-model-status">尚未连接</strong><p id="chat-model-preview">填写地址和密钥后点击连接。</p></div></div>
+    </section>
+    <details class="chat-settings-section chat-preferences" id="chat-preferences"><summary>对话偏好<span>连接名称、系统提示词与温度</span></summary>
+      <label for="chat-config-name">连接名称（可选）</label><input id="chat-config-name" maxlength="60" placeholder="默认使用服务商域名">
+      <label for="chat-config-system">系统提示词</label><textarea class="resize-none" id="chat-config-system" rows="3" maxlength="20000" placeholder="例如：请用简洁的中文回答。"></textarea>
+      <div class="chat-preference-row"><div><label for="chat-config-temp">温度（可选）</label><input id="chat-config-temp" type="number" min="0" max="2" step="0.1" placeholder="使用模型默认值"></div><p>思考等级在聊天输入框下方切换。服务商支持的等级可能因模型而异。</p></div>
+      <button class="btn" id="chat-save-preferences" type="button">保存设置</button>
+    </details>
+  </form>
+  <section class="chat-settings-section chat-backup" aria-labelledby="chat-backup-title"><div><h3 id="chat-backup-title">对话备份</h3><p>导出只包含对话，不包含地址和密钥。</p></div><div class="chat-backup-actions"><button class="btn" id="chat-export" type="button"><i class="ti" style="--icon:url(/static/vendor/bootstrap-icons/download.svg)" aria-hidden="true"></i>导出对话</button><button class="btn" id="chat-import" type="button"><i class="ti" style="--icon:url(/static/vendor/bootstrap-icons/upload.svg)" aria-hidden="true"></i>导入对话</button><input id="chat-import-file" type="file" accept=".json,application/json" hidden></div></section>
+  </div>
+  <div class="chat-settings-footer"><span>设置与对话仅存本机</span><button id="chat-settings-cancel" class="btn" type="button">完成</button></div>
+</dialog>
+<dialog id="chat-confirm" class="chat-dialog chat-confirm" aria-labelledby="chat-confirm-title"><h2 id="chat-confirm-title">删除对话</h2><p id="chat-confirm-text"></p><div class="chat-dialog-actions"><span></span><button class="btn" id="chat-confirm-no" type="button">取消</button><button class="btn primary" id="chat-confirm-yes" type="button">删除</button></div></dialog>
+{{end}}
+{{define "page_scripts"}}<script src="/static/vendor/chat/marked.js?v={{.Ver}}"></script><script src="/static/vendor/chat/purify.min.js?v={{.Ver}}"></script><script type="module" src="/static/js/chat.js?v={{.Ver}}"></script>{{end}}

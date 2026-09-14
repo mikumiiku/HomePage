@@ -1,0 +1,25 @@
+{{define "extra_head"}}{{if eq .Game.ID "chess"}}<link rel="stylesheet" href="/static/css/chess.css?v={{.Ver}}">{{end}}{{if eq .Game.ID "gomoku"}}<link rel="stylesheet" href="/static/css/gomoku.css?v={{.Ver}}">{{else if eq .Game.ID "go"}}<link rel="stylesheet" href="/static/css/go.css?v={{.Ver}}">{{end}}<link rel="stylesheet" href="/static/css/games.css?v={{.Ver}}">{{if eq .Game.ID "sandstrike"}}<link rel="stylesheet" href="/static/css/sandstrike.css?v={{.Ver}}">{{end}}{{end}}
+
+{{define "content"}}
+<div class="game-shell">
+  {{if eq .Game.ID "gomoku"}}<div class="gomoku-back-row">{{else if eq .Game.ID "go"}}<div class="go-back-row">{{end}}<a class="back-link" href="/games/">← 全部游戏</a>{{if or (eq .Game.ID "gomoku") (eq .Game.ID "go")}}</div>{{end}}
+  <div class="game-title-row">
+    <span class="icon-chip icon-chip-sm" style="--accent:{{.Game.Accent}};--icon:url(/static/img/{{.Game.Icon}}.svg?v={{.Ver}})" aria-hidden="true"></span>
+    <h1 class="game-heading">{{.Game.Title}}</h1>
+  </div>
+  {{if .Mismatch}}<div class="notice">这是「{{.Game.Badge}}」游戏，用你当前的设备玩可能不太顺手。</div>{{end}}
+  <div class="hud" id="hud">
+    <span class="hud-chip" data-hud="score"><span id="hud-score-label">得分</span> <b id="hud-score">0</b></span>
+    <span class="hud-chip" data-hud="best">最佳 <b id="hud-best">—</b></span>
+    <span class="hud-chip" id="hud-extra" hidden></span>
+    <span class="hud-spacer"></span>
+    <button class="btn" id="btn-restart" type="button">重新开始</button>
+  </div>
+  <div id="stage" class="stage" data-game="{{.Game.ID}}"></div>
+  <p class="hint-line">{{.Hint}}</p>
+</div>
+{{end}}
+
+{{define "page_scripts"}}
+{{range .Scripts}}<script src="{{.}}?v={{$.Ver}}"></script>
+{{end}}{{end}}

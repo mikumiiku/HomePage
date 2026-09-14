@@ -1,0 +1,23 @@
+# 编译产物（go build -o bin/homepage .）
+/bin/
+
+# Go 测试与覆盖率产物
+*.test
+*.out
+
+# Python 测试缓存
+__pycache__/
+*.py[cod]
+
+# 浏览器回归测试截图：仅作历史留档，脚本输出目录是 /tmp
+tests/shots/
+
+# 日志与临时文件
+*.log
+*.tmp
+*.bak
+
+# 编辑器与系统
+.DS_Store
+.idea/
+.vscode/
