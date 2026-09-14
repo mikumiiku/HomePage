@@ -30,8 +30,8 @@
   meta.className = 'swipe-meta';
   meta.innerHTML =
     '<span>连击 <b id="sw-combo">0</b></span>' +
-    '<span>生命 <b id="sw-lives">❤❤❤</b></span>' +
-    '<span>剩余 <b id="sw-time">30s</b></span>';
+    '<span aria-label="生命"><b id="sw-lives">❤❤❤</b></span>' +
+    '<span aria-label="剩余时间"><b id="sw-time">30s</b></span>';
   stage.appendChild(meta);
 
   var score = 0, combo = 0, lives = 3, timeLeft = ROUND;
@@ -63,7 +63,7 @@
   }
 
   function judge(dir) {
-    if (!running) return;
+    if (!running || M.gamePaused()) return;
     if (dir === currentDir) {
       score += 10 + combo * 2;
       combo += 1;
@@ -92,6 +92,11 @@
   }
 
   function tick() {
+    var paused = M.gamePaused();
+    if (paused) deadline += 100;
+    bar.style.transition = paused ? 'none' : 'width 0.1s linear';
+    bar.style.width = Math.max(0, Math.min(100, (deadline - Date.now()) / windowMs * 100)) + '%';
+    if (paused) return;
     timeLeft -= 0.1;
     if (timeLeft <= 0) {
       timeLeft = 0;
@@ -150,7 +155,8 @@
   arrow.style.color = '#7fa3b8';
   bar.style.width = '0%';
   M.overlay(stage, {
-    title: '指尖快划',
+    intro: true,
+      title: '指尖快划',
     lines: [
       '看清箭头方向，立刻往那边滑动',
       '连击越长加分越多，三次失误或 30 秒到就结束',

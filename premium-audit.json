@@ -3,7 +3,7 @@
     {
       "category": "violation",
       "file": "web/static/js/games/sandstrike.js",
-      "line": 59,
+      "line": 61,
       "message": "Enabled literal button has no detectable action or submit behavior.",
       "remediation": "Connect the button to a real action, make it a submit button, or disable/remove it.",
       "ruleId": "affordance.actionless-button",

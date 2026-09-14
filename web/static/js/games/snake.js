@@ -17,7 +17,7 @@
   var DIRS = { left: { x: -1, y: 0 }, right: { x: 1, y: 0 }, up: { x: 0, y: -1 }, down: { x: 0, y: 1 } };
 
   function resize() {
-    var w = Math.min(stage.clientWidth || 400, 460);
+    var w = Math.max(21, stage.clientWidth - 20 || 400);
     cell = Math.floor(w / N);
     var px = cell * N;
     var dpr = window.devicePixelRatio || 1;
@@ -30,6 +30,7 @@
     if (snake) draw(false);
   }
   window.addEventListener('resize', resize);
+  new ResizeObserver(resize).observe(stage);
   window.addEventListener('themechange', function () { if (snake) draw(false); });
 
   function placeFood() {
@@ -63,6 +64,7 @@
   }
 
   function step() {
+    if (M.gamePaused()) { schedule(); return; }
     if (!running) return;
     if (pendingDirs.length) {
       var nd = pendingDirs.shift();
@@ -185,7 +187,8 @@
   var saved = G.load().data;
   M.hud.best((saved.best && saved.best.score) || 0);
   M.overlay(stage, {
-    title: '贪吃蛇',
+    intro: true,
+      title: '贪吃蛇',
     lines: ['吃食物变长', '可以穿过边界从对岸出现，别咬到自己'],
     actions: [{ label: '开始游戏', primary: true, onClick: start }],
   });

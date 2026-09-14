@@ -45,6 +45,7 @@
     },
   };
   M.hud = hud;
+  M.gamePaused = function () { return !!document.querySelector('dialog[open]') || !!M.manualPause; };
 
   /* —— 顶栏「重新开始」按钮 —— */
   M.onRestart = function (fn) {
@@ -67,6 +68,10 @@
   M.overlay = function (stage, opts) {
     var hadMinHeight = !!stage.style.minHeight;
     if (!hadMinHeight) stage.style.minHeight = 'min(84vw, 430px)';
+    if (opts.intro) {
+      stage.dataset.instructions = (opts.lines || []).join('\n');
+      opts = Object.assign({}, opts, { title: '', lines: [] });
+    }
     var ov = document.createElement('div');
     ov.className = 'overlay';
     var card = document.createElement('div');
@@ -127,6 +132,7 @@
       A: 'left', D: 'right', W: 'up', S: 'down',
     };
     var fn = function (e) {
+      if (M.gamePaused()) return;
       var dir = map[e.key];
       if (dir) {
         e.preventDefault();

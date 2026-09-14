@@ -17,6 +17,31 @@ HOOK = '''
     window.fpsTest = {
       snapshot: () => ({ state, health, ammo: bag().ammo, reserve: bag().reserve, active, grenades, crouching: isCrouching(), cooldown: bag().cooldown, thrown: thrown.length, fov: camera.fov, y: player.y, score, round, remaining, kills, headshots, reloadTime, x: player.x, z: player.z, yaw, pitch }),
       held: key => keys.has(key),
+      // Freezes the given enemies so AI fire cannot interfere with input-timing checks.
+      pin: (...indexes) => indexes.forEach(i => { if (enemies[i]) enemies[i].cooldown = 999; }),
+      face: value => { yaw = value; pitch = 0; camera.rotation.set(pitch, yaw, 0); camera.updateMatrixWorld(true); },
+      // Clears radio cooldown and suppresses the first-contact bark, so the subtitle
+      // assertions below cannot race against AI chatter from the live render loop.
+      radioReset: () => { radioLineTime = 0; contacted = true; },
+      radio: text => radio(text),
+      // Fires real enemy bullets from (x,z) until one connects, then reports the marker
+      // state that updateBullets produced. Exercises the whole damage path, not a helper.
+      damageFrom: (x, z, attempts) => {
+        const e = enemies[0];
+        e.group.position.set(x, 0, z); e.group.updateMatrixWorld(true);
+        e.aimPoint.set(player.x, player.y - 0.4, player.z);
+        for (let i = 0; i < attempts; i++) {
+          health = 100; hitDirTime = 0;
+          const marker = document.querySelector('.fps-hitdir');
+          marker.classList.remove('on');
+          enemyBullet(e, false);
+          for (let s = 0; s < 12 && bullets.length; s++) updateBullets(0.1);
+          bullets.forEach(b => { scene.remove(b.mesh); b.mesh.geometry.dispose(); b.mesh.material.dispose(); });
+          bullets.length = 0;
+          if (hitDirTime > 0) return { angle: marker.style.getPropertyValue('--hitdir-angle'), label: marker.getAttribute('aria-label') };
+        }
+        return null;
+      },
       equip, reload, throwGrenade,
       aim: value => { aiming = value; },
       visible: index => visibleToEnemy(enemies[index]),
@@ -37,6 +62,25 @@ HOOK = '''
         camera.rotation.set(pitch, yaw, 0); camera.updateMatrixWorld(true); scene.updateMatrixWorld(true);
       },
       enemy: i => ({ hp: enemies[i].hp, alive: enemies[i].alive, x: enemies[i].group.position.x, z: enemies[i].group.position.z }),
+      // Measures the real hit rate of enemy fire at a given range against a still player.
+      // Drives enemyBullet/updateBullets directly so the result is independent of AI pacing.
+      accuracy: (distance, shots, firstShot) => {
+        if (!enemies.length) return 0;
+        const e = enemies[0];
+        e.group.position.set(player.x, 0, player.z - distance);
+        e.group.updateMatrixWorld(true);
+        e.aimPoint.set(player.x, player.y - 0.4, player.z);
+        let hits = 0;
+        for (let i = 0; i < shots; i++) {
+          e.magazine = 12; health = 100;
+          enemyBullet(e, firstShot);
+          for (let s = 0; s < 12 && bullets.length; s++) updateBullets(0.1);
+          bullets.forEach(b => { scene.remove(b.mesh); b.mesh.geometry.dispose(); b.mesh.material.dispose(); });
+          bullets.length = 0;
+          if (health < 100) hits++;
+        }
+        return hits / shots;
+      },
       blocked, buildFlow, path: (x,z) => flow.get(navKey(x,z)),
       timeOut: () => { remaining = 0.01; update(0.02); },
       lowHealth: () => { health = 1; explode(player.clone()); },
@@ -194,6 +238,65 @@ with sync_playwright() as p:
     page.get_by_role('button',name='继续游戏').click()
     page.evaluate('for(let i=0;i<40;i++) fpsTest.tick(0.05)')
     assert page.evaluate('fpsTest.snapshot().thrown') == 0
+    # Re-selecting the weapon already in hand must not interrupt a reload.
+    page.evaluate("fpsTest.equip('pistol'); fpsTest.tick(0.3); fpsTest.equip('shotgun'); fpsTest.tick(0.3)")
+    assert page.evaluate('fpsTest.snapshot().ammo') == 7
+    page.locator('.fps-canvas').focus()
+    page.keyboard.press('r'); page.keyboard.press('Digit1')
+    page.evaluate('fpsTest.tick(0.62)')
+    assert page.evaluate('fpsTest.snapshot().ammo') == 8, page.evaluate('fpsTest.snapshot()')
+    # Without pointer lock the mouse doubles as the look control:
+    # a look-drag must not spend a round, a still click must fire exactly one.
+    page.evaluate('fpsTest.position(0,14); fpsTest.pin(0,1,2,3); fpsTest.tick(0.1)')
+    box = page.locator('.fps-canvas').bounding_box()
+    cx, cy = box['x'] + box['width'] / 2, box['y'] + box['height'] / 2
+    page.mouse.move(cx, cy); page.mouse.down()
+    for step in range(10, 130, 10): page.mouse.move(cx + step, cy)
+    page.mouse.up(); page.evaluate('fpsTest.tick(0.6)')
+    assert page.evaluate('fpsTest.snapshot().ammo') == 8, '拖视不应消耗弹药'
+    page.mouse.move(cx, cy); page.mouse.down(); page.mouse.up(); page.evaluate('fpsTest.tick(0.6)')
+    assert page.evaluate('fpsTest.snapshot().ammo') == 7, '单击应当射击一次'
+    # Enemy fire is range-dependent: close shots mostly land, long shots mostly miss,
+    # and the opening round of a burst is deliberately looser than the rest.
+    near, mid, far = (page.evaluate(f'fpsTest.accuracy({d}, 400)') for d in (5, 10, 25))
+    assert near > mid > far, (near, mid, far)
+    assert 0.52 <= near <= 0.85, near
+    assert 0.35 <= mid <= 0.70, mid
+    assert 0.13 <= far <= 0.42, far
+    opening, follow = (page.evaluate(f'fpsTest.accuracy(15, 400, {b})') for b in ('true', 'false'))
+    assert opening < follow - 0.12, (opening, follow)
+    # Combat cues stay transient: with nothing happening, neither marker is on screen.
+    assert not page.locator('.fps-radio').is_visible()
+    assert not page.locator('.fps-hitdir').is_visible()
+    # The damage marker places the threat on the ring by bearing, not by colour alone.
+    page.evaluate('fpsTest.position(0,14); fpsTest.pin(0,1,2,3); fpsTest.face(0)')  # yaw 0 面向 -z，正右为 +x
+    for x, z, expect, word in [(0, 4, 0, '正前方'), (10, 14, 90, '右侧'), (0, 24, 180, '正后方'), (-10, 14, 270, '左侧')]:
+        got = page.evaluate(f'fpsTest.damageFrom({x}, {z}, 60)')
+        assert got is not None, (x, z, '未命中')
+        angle = float(got['angle'].rstrip('deg'))
+        assert abs(angle - expect) < 4, (x, z, got)
+        assert got['label'] == '受击方向：' + word, got
+    assert page.locator('.fps-hitdir').evaluate('el => el.classList.contains("on")')
+    page.evaluate('fpsTest.tick(1.4)')
+    assert not page.locator('.fps-hitdir').evaluate('el => el.classList.contains("on")')
+    # Radio lines are rate limited and clear themselves; they are the text alternative
+    # for the positional audio that carries the same information. Asserted while paused:
+    # the live AI loop would otherwise be free to emit its own chatter into this channel.
+    page.locator('.fps-pause').click()
+    page.evaluate('fpsTest.radioReset(); fpsTest.radio("测试通话")')
+    radio = page.locator('.fps-radio')
+    assert radio.evaluate('el => el.classList.contains("on")'), '字幕未激活'
+    assert radio.evaluate('el => el.textContent') == '无线电：测试通话', radio.evaluate('el => el.outerHTML')
+    page.wait_for_timeout(250)   # 等淡入结束再判可见性，不看过渡中间态
+    assert radio.is_visible()
+    page.evaluate('fpsTest.radio("被限流")')
+    assert radio.evaluate('el => el.textContent') == '无线电：测试通话', '冷却期内不应覆盖'
+    page.get_by_role('button', name='继续游戏').click()
+    page.evaluate('fpsTest.tick(2.4)')
+    assert not page.locator('.fps-radio').evaluate('el => el.classList.contains("on")'), '字幕状态应结束'
+    page.wait_for_timeout(300)   # visibility 的离散过渡在 0.2s 后才生效
+    assert not page.locator('.fps-radio').is_visible(), '字幕应自行消失'
+    print('Enemy fire accuracy near/mid/far %.2f/%.2f/%.2f, opening shot %.2f vs %.2f PASS' % (near, mid, far, opening, follow), flush=True)
     print('Desktop: character, migration, crouch/cover, six weapons, bolt cycle, shells and grenades PASS', flush=True)
     print('Desktop mechanics, wins/losses and persistence: PASS', flush=True)
     page.goto(BASE + '/games/')
@@ -244,4 +347,4 @@ with sync_playwright() as p:
     bp.get_by_role('button', name='重新加载', exact=True).wait_for()
     assert bp.locator('.overlay-title').inner_text() == '无法打开 3D 场景'
     bad.close()
-    print(json.dumps({'result':'PASS', 'checks':['skinned soldier/arm rig','v1 migration','crouch cover','six weapons','scope/bolt cooldown','shotgun pellets/shell reload','grenade bounce/blast/self damage','movement','collision','navigation','body/head hits','wall occlusion','reload','pause/resume','three rounds','win/loss','save/reload','sound','theme','mobile controls/layout','WebGL fallback'], 'errors':errors, 'screenshots':str(OUT)}, ensure_ascii=False))
+    print(json.dumps({'result':'PASS', 'checks':['skinned soldier/arm rig','v1 migration','crouch cover','six weapons','scope/bolt cooldown','shotgun pellets/shell reload','grenade bounce/blast/self damage','movement','collision','navigation','body/head hits','wall occlusion','reload','pause/resume','three rounds','win/loss','save/reload','sound','theme','mobile controls/layout','WebGL fallback','enemy accuracy curve','damage direction','transient radio subtitle'], 'errors':errors, 'screenshots':str(OUT)}, ensure_ascii=False))

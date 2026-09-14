@@ -185,3 +185,7 @@ GO_BASE=http://127.0.0.1:8041 python3 tests/go_test.py
 点击或键盘走棋，显示合法落点、上一手与将军位置。支持选择执棋、翻转棋盘、悔棋、认输、棋谱查看/PGN 导出、自动续局和本地战绩。存档为 chess:main v1；损坏/未来版本保留并允许备份，跨标签页更新暂停旧页面。所有 SVG 和 chess.js 0.10.3 规则库自托管，资源来源与许可见 web/static/img/chess/SOURCES.md 及 web/static/vendor/chess/SOURCES.md。
 
 验证：`node tests/chess_engine_test.cjs`、`go test ./...`；浏览器运行 `CHESS_BASE=http://127.0.0.1:8044 python3 tests/chess_test.py`，需先启动对应端口的构建。截图位于 `/tmp/chess-verification/`，验收记录见 `tests/CHESS_VERIFICATION.md`。
+
+
+## 小游戏统一布局
+2026-09-14：全部游戏按剩余视口等比适配，主游戏界面单屏显示并水平居中；即时操作常驻，新局选项、记录与说明在设置中。此约定替代前文手机游戏页自然滚动与常驻新局设置的旧布局。设置内容独立滚动。浏览器回归：`python3 tests/game_layout_test.py`（8034 预览服务，GAME_BASE 可覆盖），覆盖全部十个游戏、横竖屏、设置、开局和棋盘实际落子。

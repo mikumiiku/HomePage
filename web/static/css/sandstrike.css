@@ -47,6 +47,16 @@
 .fps-damage { position: absolute; inset: 0; box-shadow: inset 0 0 80px var(--fps-danger); opacity: 0; pointer-events: none; }
 .fps-message { position: absolute; top: 25%; left: 50%; transform: translateX(-50%); max-width: 80%; color: var(--fps-ui); text-shadow: 0 2px 8px var(--fps-hud-shadow); font-size: 19px; letter-spacing: 2px; text-align: center; pointer-events: none; }
 .fps-toolbar { position: absolute; inset: auto auto 24px 40px; display: flex; gap: 10px; z-index: 5; }
+/* Event-driven cues. Both appear on a trigger and clear themselves, so neither one
+   adds anything to the always-on HUD budget. */
+.fps-hitdir { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform: rotate(var(--hitdir-angle, 0deg)); pointer-events: none; opacity: 0; transition: opacity .18s; }
+.fps-hitdir.on { opacity: 1; }
+.fps-hitdir i { position: absolute; left: -10px; top: -104px; width: 20px; height: 20px; background: var(--fps-danger); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+/* visibility is switched with a delay instead of being transitioned: transitioning it
+   is a discrete step, which leaves the first frames of the fade-in actually invisible
+   and makes the element's rendered state depend on frame timing. */
+.fps-radio { position: absolute; left: 50%; top: 92px; transform: translateX(-50%); margin: 0; max-width: min(70%, 380px); padding: 5px 12px; border-left: 2px solid var(--fps-alert); background: var(--fps-hud-shadow); color: var(--fps-ui); font-size: 13px; line-height: 1.5; text-align: left; pointer-events: none; opacity: 0; visibility: hidden; transition: opacity .2s, visibility 0s .2s; }
+.fps-radio.on { opacity: 1; visibility: visible; transition: opacity .2s, visibility 0s; }
 .fps-toolbar .fps-loadout { display: none; }
 .fps-stage[data-state="playing"] .fps-toolbar { display: none; }
 .fps-reload { display: none; }
@@ -104,6 +114,8 @@
   .fps-stage .overlay-title { font-size: 36px; }
   .fps-toolbar { left: 24px; bottom: 20px; }
   .fps-message { font-size: 16px; }
+  .fps-radio { top: 70px; max-width: 64%; font-size: 12px; }
+  .fps-hitdir i { left: -8px; top: -78px; width: 16px; height: 16px; }
 }
 @media (max-height: 540px) and (orientation: landscape) {
   .fps-viewport { height: min(440px,100svh); }
@@ -117,4 +129,4 @@
   .fps-loadout { padding-top: 12px; }
   .fps-help { margin-top: 12px; }
 }
-@media (prefers-reduced-motion: reduce) { .fps-slots button, .fps-healthbar i { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .fps-slots button, .fps-healthbar i, .fps-hitdir, .fps-radio { transition: none; } }

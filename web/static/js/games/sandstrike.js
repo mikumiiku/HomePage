@@ -55,6 +55,8 @@
       <div class="fps-status"><canvas class="fps-radar" width="224" height="224" aria-label="战术地图"></canvas><div class="fps-mission"><strong class="fps-clock">04:00</strong><span class="fps-round">1 / 3</span><span class="fps-objective"></span></div></div>
       <div class="fps-scope" hidden aria-hidden="true"><div class="fps-scope-lens"><span>4×</span></div></div><div class="fps-crosshair" aria-hidden="true"></div><div class="fps-damage" aria-hidden="true"></div>
       <div class="fps-message" role="status" aria-live="polite" hidden></div>
+      <p class="fps-radio" role="status" aria-live="polite"></p>
+      <div class="fps-hitdir" role="img" aria-label="受击方向" aria-hidden="true"><i aria-hidden="true"></i></div>
       <div class="fps-bottom"><div class="fps-stat fps-vitals" aria-label="生命"><span class="fps-health-icon" aria-hidden="true">+</span><b class="fps-health">100</b><span class="fps-posture fps-sr">站立</span><div class="fps-healthbar"><i></i></div></div><div class="fps-stat fps-rounds"><div class="fps-weapon-name">突击步枪</div><b class="fps-ammo">30</b><span class="fps-reserve">/ 90</span><div class="fps-action-progress" aria-hidden="true"><i></i></div></div></div>
       <div class="fps-slots" role="group" aria-label="切换武器">${['primary','pistol','knife','grenade'].map((id,i)=>`<button type="button" data-weapon="${id}"><span class="fps-slot-number">${i+1}</span><span class="fps-slot-preview" aria-hidden="true"></span><span class="fps-slot-label"></span></button>`).join('')}</div>
       <div class="fps-touch"><div class="fps-dpad"><button type="button" data-move="KeyW" aria-label="向前移动">前进</button><button type="button" data-move="KeyA" aria-label="向左移动">左移</button><button type="button" data-move="KeyS" aria-label="向后移动">后退</button><button type="button" data-move="KeyD" aria-label="向右移动">右移</button></div><div class="fps-touch-actions"><button type="button" class="fps-aim" aria-pressed="false">瞄准</button><button type="button" class="fps-crouch" aria-pressed="false">蹲下</button><button type="button" class="fps-throw">投雷</button><button type="button" class="fps-fire">射击</button></div></div>
@@ -289,11 +291,14 @@
     let state = 'menu', health = 100, score = 0, round = 1, kills = 0, headshots = 0;
     let yaw = 0, pitch = 0, remaining = 240, reloadTime = 0, reloadWeapon = null, recoil = 0, damage = 0, hitTime = 0, waveDelay = 0;
     let clockTime = 0, slotTime = 0, autoFireAt = 0, pendingShot = false, firing = false, triggerWasHeld = false, aiming = false, footsteps = 0, messageTime = 0, last = 0, raf = 0, disposed = false;
+    // Transient combat cues. Every one of these is event-driven and fades on its own:
+    // nothing here is allowed to become a permanently visible element.
+    let hitDir = 0, hitDirTime = 0, radioTime = 0, stepTime = 0, radioLineTime = 0, contacted = false;
     let enemies = [], flow = new Map();
     const keys = new Set(), player = new T.Vector3(0, 1.65, 14), ray = new T.Raycaster();
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
     let audioContext;
-    function audioShot(frequency, duration = 0.07, volume = 0.025) {
+    function audioShot(frequency, duration = 0.07, volume = 0.025, pan = 0) {
       if (!sound) return;
       try {
         if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -302,8 +307,29 @@
         oscillator.type = 'triangle'; oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
         oscillator.frequency.exponentialRampToValueAtTime(45, audioContext.currentTime + duration);
         gain.gain.setValueAtTime(volume, audioContext.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
-        oscillator.connect(gain); gain.connect(audioContext.destination); oscillator.start(); oscillator.stop(audioContext.currentTime + duration);
+        oscillator.connect(gain);
+        if (pan && audioContext.createStereoPanner) {
+          const panner = audioContext.createStereoPanner();
+          panner.pan.setValueAtTime(Math.max(-1, Math.min(1, pan)), audioContext.currentTime);
+          gain.connect(panner); panner.connect(audioContext.destination);
+        } else gain.connect(audioContext.destination);
+        oscillator.start(); oscillator.stop(audioContext.currentTime + duration);
       } catch (_) { /* Muted fallback on devices without Web Audio. */ }
+    }
+    // Bearing of a world point relative to where the player is looking: 0 straight ahead,
+    // positive to the right. Shared by the stereo mix and the damage direction marker.
+    function bearingTo(position) {
+      const dx = position.x - player.x, dz = position.z - player.z;
+      return Math.atan2(Math.cos(yaw) * dx - Math.sin(yaw) * dz, -Math.sin(yaw) * dx - Math.cos(yaw) * dz);
+    }
+    // Enemy sound is positioned rather than centred: the bearing picks the stereo side and
+    // the distance the volume. For a threat outside the vision cone this is the only cue
+    // the player gets, so it has to carry past the point where the model is still fogged out.
+    function audioAt(frequency, duration, volume, position, range) {
+      const dx = position.x - player.x, dz = position.z - player.z, distance = Math.hypot(dx, dz);
+      if (distance > range) return;
+      const right = Math.cos(yaw) * dx - Math.sin(yaw) * dz;
+      audioShot(frequency, duration, volume * Math.max(0.15, 1 - distance / range), right / Math.max(0.001, distance));
     }
     function setState(next) {
       state = next; stage.dataset.state = next;
@@ -314,6 +340,29 @@
     }
     function clearInput() { keys.clear(); pendingShot = false; firing = false; triggerWasHeld = false; aiming = false; stage.classList.remove('fps-tactical'); $('aim').setAttribute('aria-pressed', 'false'); }
     function notice(text, seconds = 2.4) { $('message').textContent = text; $('message').hidden = false; messageTime = seconds; }
+    // Radio traffic carries enemy state to the player by ear, and doubles as the text
+    // alternative for players who cannot use positional sound. Rate limited so it reads
+    // as occasional chatter rather than a running commentary on the fight.
+    function radio(text) {
+      if (radioLineTime > 0) return;
+      radioLineTime = 5.5; radioTime = 2.2;
+      $('radio').textContent = '无线电：' + text; $('radio').classList.add('on');
+      audioShot(680, .055, .008);
+    }
+    const DIRECTION_WORDS = ['正前方', '右前方', '右侧', '右后方', '正后方', '左后方', '左侧', '左前方'];
+    // Direction is carried by where the marker sits on the ring and by its arrow shape,
+    // never by colour alone; the label gives screen readers the same information.
+    function markHitFrom(position) {
+      hitDir = bearingTo(position); hitDirTime = 1.2;
+      const degrees = ((hitDir * 180 / Math.PI) % 360 + 360) % 360;
+      const marker = $('hitdir');
+      marker.style.setProperty('--hitdir-angle', degrees.toFixed(1) + 'deg');
+      marker.classList.add('on');
+      // Exposed to assistive tech only while it is actually on screen, so a stale
+      // direction is never left sitting in the accessibility tree.
+      marker.removeAttribute('aria-hidden');
+      marker.setAttribute('aria-label', '受击方向：' + DIRECTION_WORDS[Math.round(degrees / 45) % 8]);
+    }
     function hud() {
       $('health').textContent = Math.ceil(health); $('healthbar').firstElementChild.style.width = health + '%';
       const w = weapon(), rounds = bag();
@@ -371,7 +420,7 @@
       const actions = {};
       soldier.animations.forEach(clip => { if (clip.name === 'Idle' || clip.name === 'Walk') actions[clip.name] = mixer.clipAction(clip).play(); });
       actions.Walk?.setEffectiveWeight(0); actions.Idle?.setEffectiveWeight(1);
-      const enemy = { group, body, mixer, actions, hp: 100, alive: true, cooldown: .25 + index * .08, walk: index, head: null, mode: 'patrol', memory: 0, sense: 0, sees: false, timer: 0, magazine: 12, burst: 0, path: [], pathTime: 0, lastKnown: new T.Vector3(x,0,z), home: new T.Vector3(x,0,z), goal: new T.Vector3(x,0,z), aimPoint: new T.Vector3(), radioCooldown: 0, radioPending: null, reportRole: 0, reportDirection: new T.Vector3(0,0,1), fall: 0, searchScan: 0, hearingCooldown: 0 };
+      const enemy = { group, body, mixer, actions, hp: 100, alive: true, cooldown: .25 + index * .08, walk: index, head: null, mode: 'patrol', memory: 0, sense: 0, sees: false, timer: 0, magazine: 12, burst: 0, burstShots: 0, step: 0, path: [], pathTime: 0, lastKnown: new T.Vector3(x,0,z), home: new T.Vector3(x,0,z), goal: new T.Vector3(x,0,z), aimPoint: new T.Vector3(), radioCooldown: 0, radioPending: null, reportRole: 0, reportDirection: new T.Vector3(0,0,1), fall: 0, searchScan: 0, hearingCooldown: 0 };
       body.traverse(o => {
         if (o.isBone && /Head$/.test(o.name)) enemy.head = o;
         if (o.isMesh) { (Array.isArray(o.material)?o.material:[o.material]).forEach(fog.applyMaterial); o.castShadow = true; o.receiveShadow = true; o.userData.enemy = enemy; o.frustumCulled = false; }
@@ -422,7 +471,8 @@
       clearEnemies(); clearProjectiles();
       const spots = [[-3, -18], [23, -22], [-25, -9], [25, 8], [-24, 24], [12, -27]];
       spots.slice(0, round + 3).forEach(([x, z], i) => createEnemy(x, z, i));
-      remaining = 240; waveDelay = 0; buildFlow(); notice('第 ' + round + ' 轮', 1.5); hud();
+      remaining = 240; waveDelay = 0; contacted = false; radioLineTime = 0;
+      buildFlow(); notice('第 ' + round + ' 轮', 1.5); hud();
     }
     function lockPointer() {
       if (matchMedia('(pointer: coarse)').matches || !canvas.requestPointerLock) return;
@@ -433,6 +483,8 @@
       removeOverlays(); clearInput(); player.set(0, 1.65, 14); yaw = 0; pitch = 0;
       health = 100; refill(); active = primary; switchTime = 0; crouchToggle = false; score = 0; round = 1; kills = 0; headshots = 0;
       reloadTime = 0; reloadWeapon = null; recoil = 0; damage = 0; hitTime = 0;
+      hitDirTime = 0; radioTime = 0; stepTime = 0;
+      $('hitdir').classList.remove('on'); $('radio').classList.remove('on');
       equip(primary, true);
       fog.reset();fog.update(0,player,yaw,false,true);setState('playing'); spawnWave(); if(matchMedia('(pointer: coarse)').matches) viewport.scrollIntoView({block:'start'}); canvas.focus({ preventScroll: true }); lockPointer(); audioShot(200, 0.08, 0.01);
     }
@@ -444,7 +496,7 @@
       if(state === 'paused') { const restart=document.createElement('button');restart.type='button';restart.className='btn';restart.textContent='重新开始';restart.addEventListener('click',start);overlay.querySelector('.choices').appendChild(restart); }
       if(state !== 'error') {
         const help=document.createElement('details');help.className='fps-help';
-        help.innerHTML='<summary>操作与战术</summary><p>WASD 移动 · 左键 / 空格射击 · 右键切换瞄准<br>C 蹲伏 · R 换弹 · G 投雷 · Shift 奔跑<br>1—4 切枪 · Q 上一武器 · Tab 战术地图 · Esc 暂停<br>常规视野 26 米，狙击开镜 48 米；未探索区域被迷雾遮蔽。<br>地面视野：浅色巡逻，琥珀色警戒，红色瞄准。敌人会通过无线电共享最后目击位置。</p>';
+        help.innerHTML='<summary>操作与战术</summary><p>WASD 移动 · 左键 / 空格射击 · 右键切换瞄准<br>C 蹲伏 · R 换弹 · G 投雷 · Shift 奔跑<br>1—4 切枪 · Q 上一武器 · Tab 战术地图 · Esc 暂停<br>未锁定鼠标时：拖动画面转向，单击射击。<br>常规视野 26 米，狙击开镜 48 米；未探索区域被迷雾遮蔽。<br>地面视野：浅色巡逻，琥珀色警戒，红色瞄准。敌人会通过无线电共享最后目击位置。</p>';
         overlay.querySelector('.overlay-card').appendChild(help);
       }
       overlay.querySelector('button').focus({ preventScroll: true });
@@ -465,6 +517,8 @@
     function isCrouching() { return crouchToggle; }
     function equip(id, force = false) {
       if ((!force && state !== 'playing') || !WEAPONS[id]) return;
+      // Selecting the weapon already in hand must not cancel a reload or replay the raise animation.
+      if (id === active && !force) return;
       if(id!==active)previousWeapon = active; active = id; slotTime = 2.2; reloadTime = 0; reloadWeapon = null; switchTime = force ? 0 : 0.28;
       pendingShot = false; firing = false; triggerWasHeld = false; aiming = false; recoil = 0; flash.visible = false; gun.visible = true;
       camera.fov = 74; camera.updateProjectionMatrix();
@@ -483,6 +537,7 @@
       e.hp -= amount; hitTime = 0.16; e.memory = 7; e.lastKnown.copy(player); e.mode = 'search'; e.timer = 0.5;
       if (e.hp > 0) return;
       e.alive = false; e.fall=0; tactical.hideVision(e); kills++; if (head) headshots++; score += head ? 150 : 100;
+      radio('队友倒下了');
       hitTime = 0.3; $('crosshair').classList.add('kill');
       if (enemies.every(enemy => !enemy.alive)) {
         if (round === 3) { finish(true, '训练完成，剩余生命已计入得分。'); return; }
@@ -575,7 +630,7 @@
       const center = position.clone(); center.y = Math.max(0.18, center.y);
       const selfDistance = center.distanceTo(player);
       if (selfDistance < 5 && clearLine(center, player)) {
-        health = Math.max(0, health - Math.ceil(100 * (1 - selfDistance / 5))); damage = 0.8;
+        health = Math.max(0, health - Math.ceil(100 * (1 - selfDistance / 5))); damage = 0.8; markHitFrom(center);
         if (health <= 0) { finish(false, '被手雷波及。投掷后注意保持距离。'); return; }
       }
       enemies.filter(e => e.alive).forEach(e => {
@@ -642,16 +697,27 @@
       candidates.sort((a,b)=>a.d-b.d);
       return candidates[0]?.v || e.group.position.clone();
     }
-    function enemyBullet(e) {
+    // Enemy fire accuracy, measured against a still target. Follow-up rounds land about
+    // 66% at 5 m, 52% at 10 m, 39% at 15 m and 26% at 25 m. The opening round of every
+    // burst is a deliberate warning shot: it lands at roughly a third of that rate, which
+    // is the readable "he is shooting at me" beat before damage starts arriving.
+    const ENEMY_MISS_BASE = 0.35, ENEMY_MISS_PER_METRE = 0.026, ENEMY_FIRST_SHOT_PENALTY = 2.0;
+    function enemyBullet(e, firstShot = false) {
       const origin=e.group.position.clone(); origin.y=1.28;
       // Track only confirmed sightings; fast bullets still sweep the full path against cover.
-      const target=e.aimPoint.clone(), spread=0.12+origin.distanceTo(target)*0.009;
+      const aim=e.aimPoint.clone(), distance=origin.distanceTo(aim);
+      const spread=(ENEMY_MISS_BASE+distance*ENEMY_MISS_PER_METRE)*(firstShot?ENEMY_FIRST_SHOT_PENALTY:1);
+      // Sample the miss in the plane perpendicular to the shot, otherwise accuracy would
+      // depend on which side of the courtyard the soldier happens to be standing on.
+      const dir=aim.clone().sub(origin).normalize();
+      const side=new T.Vector3().crossVectors(dir,Math.abs(dir.y)>.9?new T.Vector3(1,0,0):new T.Vector3(0,1,0)).normalize();
+      const lift=new T.Vector3().crossVectors(side,dir).normalize();
       const angle=Math.random()*Math.PI*2, radius=Math.sqrt(Math.random())*spread;
-      target.x+=Math.cos(angle)*radius; target.y+=Math.sin(angle)*radius;
+      const target=aim.addScaledVector(side,Math.cos(angle)*radius).addScaledVector(lift,Math.sin(angle)*radius);
       const velocity=target.sub(origin).normalize().multiplyScalar(220);
       const mesh=new T.Mesh(new T.CylinderGeometry(0.025,0.025,0.65,5),new T.MeshBasicMaterial({color:color('flash')}));
       fog.applyMaterial(mesh.material);mesh.position.copy(origin); mesh.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),velocity.clone().normalize()); scene.add(mesh);
-      bullets.push({mesh,velocity,life:.6}); e.magazine--; audioShot(95,0.045,0.009);
+      bullets.push({mesh,velocity,life:.6,from:origin.clone()}); e.magazine--; audioAt(95,.045,.09,e.group.position,46);
     }
     function updateBullets(dt) {
       for(let i=bullets.length-1;i>=0;i--) {
@@ -663,7 +729,7 @@
         const travel=onRay.distanceTo(b.mesh.position);
         const hit=sq<0.28*0.28 && travel<=length && (!wall||travel<wall.distance);
         ray.far=Infinity; b.life-=dt;
-        if(hit){health=Math.max(0,health-(10+(round-1)*2)); damage=0.5; if(health<=0)finish(false,'生命耗尽。敌人举枪时可以横移或退回掩体。');}
+        if(hit){health=Math.max(0,health-(10+(round-1)*2)); damage=0.5; markHitFrom(b.from); if(health<=0)finish(false,'生命耗尽。敌人举枪时可以横移或退回掩体。');}
         if(hit||wall||b.life<=0){scene.remove(b.mesh);b.mesh.geometry.dispose();b.mesh.material.dispose();bullets.splice(i,1);}
         else b.mesh.position.addScaledVector(b.velocity,dt);
       }
@@ -688,7 +754,7 @@
     }
     function broadcastAlert(sender, report) {
       // Radio transmits a dated sighting, never a live reference to the player.
-      tactical.pulse(sender.group.position); audioShot(680,.055,.008);
+      tactical.pulse(sender.group.position);
       enemies.forEach(ally=>{
         if(ally===sender||!ally.alive||ally.group.position.distanceTo(sender.group.position)>24)return;
         if(ally.sees)return;
@@ -732,6 +798,7 @@
           e.sees=distance<(isCrouching()?23:30) && (facing>Math.cos(e.memory>0?.96:Math.PI/4)||distance<1.3) && visibleToEnemy(e);
           if(e.sees){
             e.lastKnown.copy(player);e.memory=14;e.searchScan=0;e.reportRole=0;
+            if(!contacted){contacted=true;radio('发现目标');}
             if(e.radioCooldown<=0&&!e.radioPending){e.radioPending={delay:.65,position:player.clone()};e.radioCooldown=6;}
           }
         }
@@ -741,15 +808,18 @@
           if(e.sees)e.aimPoint.lerp(new T.Vector3(player.x,player.y-.4,player.z),Math.min(1,dt*9));
           e.group.rotation.y=Math.atan2(e.aimPoint.x-pos.x,e.aimPoint.z-pos.z);
           if(!e.sees){e.mode='search';e.timer=0.6;e.path=[];e.pathTime=0;searchGoal(e);attackers--;}
-          else if(e.timer<=0){e.mode='burst';e.burst=Math.min(e.magazine,round===1?4:5);e.timer=0;}
+          else if(e.timer<=0){e.mode='burst';e.burst=Math.min(e.magazine,round===1?4:5);e.burstShots=0;e.timer=0;}
         } else if(e.mode==='burst') {
-          if(e.timer<=0){if(e.sees){enemyBullet(e);e.aimPoint.lerp(new T.Vector3(player.x,player.y-.4,player.z),.6);}e.burst--;e.timer=0.12;}
+          if(e.timer<=0){if(e.sees){enemyBullet(e,e.burstShots++===0);e.aimPoint.lerp(new T.Vector3(player.x,player.y-.4,player.z),.6);}e.burst--;e.timer=0.12;}
           if(e.burst<=0||!e.sees){e.mode='cover';setEnemyGoal(e,coverGoal(e));e.path=[];e.timer=.85+Math.random()*.35;e.cooldown=e.timer;attackers--;e.pathTime=0;}
         } else {
-          if(e.magazine<=0 && e.mode!=='reload'){e.mode='reload';e.timer=1.8;}
+          if(e.magazine<=0 && e.mode!=='reload'){e.mode='reload';e.timer=1.8;audioAt(300,.06,.05,pos,20);if(pos.distanceTo(player)<16)radio('我在换弹');}
           if(e.mode==='reload') {if(e.timer<=0){e.magazine=12;e.mode='search';e.path=[];e.pathTime=0;}}
           else if(e.sees && e.cooldown<=0 && attackers<3 && distance<25 && e.mode!=='cover') {
-            e.mode='aim';e.timer=.32+Math.random()*.18-(round-1)*.025;e.aimPoint.copy(player);e.aimPoint.y-=0.4;attackers++;
+            // The aim window is the player's telegraph: the vision cone turns red and the
+            // signal light comes on. Kept short on purpose — tests/sandstrike_ai_test.py
+            // pins the whole aim-then-burst sequence inside 1.1 s ("fast reaction").
+            e.mode='aim';e.timer=.38+Math.random()*.17-(round-1)*.06;e.aimPoint.copy(player);e.aimPoint.y-=0.4;attackers++;
             
           } else {
             if(e.mode==='cover' && e.timer<=0){e.mode='search';e.pathTime=0;}
@@ -775,6 +845,11 @@
           e.group.rotation.y=Math.atan2(e.lastKnown.x-pos.x,e.lastKnown.z-pos.z)+(scanning?Math.sin(clockTime*1.8+e.walk)*.9:0);
           if(scanning){e.searchScan+=dt;if(e.searchScan>=3){e.memory=0;e.path=[];e.pathTime=0;}}
         }
+        // Footsteps are the cue that something is moving on a bearing you cannot see yet.
+        if(moving) {
+          e.step += dt * (e.mode==='patrol'?2.35:e.mode==='cover'?3.5:3.1);
+          if(e.step > 0.9) { e.step = 0; if(stepTime <= 0) { stepTime = 0.09; audioAt(120,.05,.05,pos,22); } }
+        }
         tactical.updateVision(e,dt,player.y,clockTime);
         e.actions.Walk?.setEffectiveWeight(moving?1:0); e.actions.Idle?.setEffectiveWeight(moving?0:1);
         e.mixer.update(dt);e.weapon.rotation.x=0;poseEnemyArms(e);
@@ -788,6 +863,10 @@
       clockTime += dt; slotTime = Math.max(0,slotTime-dt); tactical.update(dt);
       damage = Math.max(0, damage - dt * 1.4); hitTime = Math.max(0, hitTime - dt); if(hitTime===0)$('crosshair').classList.remove('kill');
       messageTime -= dt; if (messageTime <= 0) $('message').hidden = true;
+      stepTime = Math.max(0, stepTime - dt); radioLineTime = Math.max(0, radioLineTime - dt);
+      // Both markers clear themselves; guard on the timer so idle frames never touch the DOM.
+      if (hitDirTime > 0) { hitDirTime = Math.max(0, hitDirTime - dt); if (hitDirTime === 0) { $('hitdir').classList.remove('on'); $('hitdir').setAttribute('aria-hidden', 'true'); } }
+      if (radioTime > 0) { radioTime = Math.max(0, radioTime - dt); if (radioTime === 0) $('radio').classList.remove('on'); }
       if (reloadTime > 0) {
         reloadTime -= dt;
         if (reloadTime <= 0 && reloadWeapon) {
@@ -934,6 +1013,9 @@
     document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
     document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement !== canvas) pause(); });
     document.addEventListener('pointerlockerror', () => { /* Direct-fire fallback is already active. */ });
+    // Without pointer lock the mouse doubles as the look control, so a press only fires
+    // if the pointer stays put; moving past this threshold turns it into a look-drag.
+    const DRAG_FIRE_THRESHOLD = 6;
     let drag = null;
     function requestShot() {
       if (state !== 'playing') return;
@@ -946,11 +1028,12 @@
       e.preventDefault(); canvas.focus({ preventScroll: true });
       if (e.pointerType === 'mouse' && e.button === 2) { aiming = !aiming; return; }
       if (e.pointerType === 'mouse' && e.button !== 0) return;
-      if (e.pointerType === 'mouse') { firing = true; triggerWasHeld = true; requestShot(); }
-      if (document.pointerLockElement !== canvas) {
-        drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
-        canvas.setPointerCapture(e.pointerId);
+      if (document.pointerLockElement === canvas) {
+        if (e.pointerType === 'mouse') { firing = true; triggerWasHeld = true; requestShot(); }
+        return;
       }
+      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, mouse: e.pointerType === 'mouse', moved: false };
+      canvas.setPointerCapture(e.pointerId);
     });
     // Pointer events only report the first pressed mouse button; handle chords too.
     canvas.addEventListener('mousedown', e => {
@@ -961,10 +1044,19 @@
     window.addEventListener('mouseup',e=>{if(e.button===0)firing=false;});
     function look(dx, dy) { const sensitivity = aiming ? (active === 'sniper' ? 0.0007 : 0.0015) : 0.0025; yaw -= dx * sensitivity; pitch = Math.max(-1.25, Math.min(1.25, pitch - dy * sensitivity)); }
     document.addEventListener('mousemove', e => { if (state === 'playing' && document.pointerLockElement === canvas) look(e.movementX, e.movementY); });
-    canvas.addEventListener('pointermove', e => { if (state === 'playing' && drag && e.pointerId === drag.id && document.pointerLockElement !== canvas) { look(e.clientX - drag.x, e.clientY - drag.y); drag.x = e.clientX; drag.y = e.clientY; } });
+    canvas.addEventListener('pointermove', e => {
+      if (state !== 'playing' || !drag || e.pointerId !== drag.id || document.pointerLockElement === canvas) return;
+      if (!drag.moved && Math.abs(e.clientX - drag.x0) + Math.abs(e.clientY - drag.y0) > DRAG_FIRE_THRESHOLD) drag.moved = true;
+      look(e.clientX - drag.x, e.clientY - drag.y); drag.x = e.clientX; drag.y = e.clientY;
+    });
     window.addEventListener('pointerup', e => {
-      if (e.pointerType === 'mouse') { if (e.button === 0) firing = false;  }
-      if (drag && drag.id === e.pointerId) drag = null;
+      if (e.pointerType === 'mouse' && e.button === 0) firing = false;
+      if (drag && drag.id === e.pointerId) {
+        // Still click without pointer lock is a shot; a drag was only looking around.
+        const click = drag.mouse && !drag.moved && e.button === 0;
+        drag = null;
+        if (click) requestShot();
+      }
     });
     canvas.addEventListener('pointercancel', () => { drag = null; clearInput(); });
     ['contextmenu', 'dragstart', 'auxclick', 'selectstart'].forEach(type => viewport.addEventListener(type, e => { e.preventDefault(); e.stopPropagation(); }));

@@ -17,9 +17,12 @@
   var flagBtn = document.createElement('button');
   flagBtn.type = 'button';
   flagBtn.className = 'btn';
-  flagBtn.textContent = '🚩 旗子模式';
+  flagBtn.setAttribute('aria-label', '旗子模式'); flagBtn.title = '旗子模式'; flagBtn.setAttribute('aria-pressed', 'false');
+  flagBtn.classList.add('game-icon-button');
+  flagBtn.innerHTML = '<span class="ti" aria-hidden="true" style="--icon:url(/static/vendor/bootstrap-icons/flag.svg)"></span>';
   flagBtn.addEventListener('click', function () {
     flagMode = !flagMode;
+    flagBtn.setAttribute('aria-pressed', String(flagMode));
     flagBtn.style.background = flagMode ? 'var(--sand)' : '';
     flagBtn.style.borderColor = flagMode ? 'var(--amber)' : '';
     M.toast(flagMode ? '旗子模式：轻触插旗' : '旗子模式已关闭');
@@ -46,6 +49,7 @@
   function startTimer() {
     if (timer) return;
     timer = setInterval(function () {
+      if (M.gamePaused()) return;
       seconds += 1;
       timeText.textContent = M.fmt.clock(seconds);
     }, 1000);
@@ -285,6 +289,7 @@
     M.hud.extra(flagBtn);
     M.hud.extra(timeWrap);
     M.overlay(stage, {
+      intro: true,
       title: '扫雷',
       lines: [
         st.best.easy.seconds ? ('简单最快 ' + M.fmt.seconds(st.best.easy.seconds)) : '简单 9×9，10 颗雷',

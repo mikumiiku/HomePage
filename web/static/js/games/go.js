@@ -436,6 +436,7 @@
   function fitBoard() {
     cancelAnimationFrame(fitFrame);
     fitFrame = requestAnimationFrame(function () {
+      if (stage.classList.contains("unified-stage")) return;
       var noticeHeight = el('notice').hidden ? 0 : el('notice').offsetHeight + 12;
       var extras = (el('board-controls').hidden ? 0 : el('board-controls').offsetHeight + 8) + (el('scoring').hidden ? 0 : el('scoring').offsetHeight + 8) + (el('review-controls').hidden ? 0 : el('review-controls').offsetHeight + 8);
       var width = stage.clientWidth, height = stage.clientHeight - noticeHeight;

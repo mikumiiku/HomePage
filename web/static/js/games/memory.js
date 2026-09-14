@@ -32,6 +32,7 @@
   function startTimer() {
     if (timer) return;
     timer = setInterval(function () {
+      if (M.gamePaused()) return;
       seconds += 1;
       timeText.textContent = M.fmt.clock(seconds);
     }, 1000);
@@ -138,6 +139,7 @@
     M.hud.reset();
     M.hud.extra(timeText);
     M.overlay(stage, {
+      intro: true,
       title: '记忆翻牌',
       lines: [
         '点击卡片翻牌，找出所有成对的花',

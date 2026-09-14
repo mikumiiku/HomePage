@@ -170,6 +170,7 @@
     clearTimeout(timer);
     timer = setTimeout(function () {
       if (!running || paused) return;
+      if (M.gamePaused()) { schedule(); return; }
       softDrop();
     }, dropMs);
   }
@@ -225,6 +226,10 @@
     for (var y = 0; y < ROWS; y++) grid.push(new Array(COLS).fill(null));
     score = 0; lines = 0; level = 1; dropMs = 800;
     running = true; paused = false;
+    pauseButton.disabled = false;
+    pauseButton.setAttribute('aria-label', '暂停游戏'); pauseButton.title = '暂停游戏';
+    var pauseIcon = pauseButton.querySelector('.ti');
+    if (pauseIcon) pauseIcon.style.setProperty('--icon', 'url(/static/vendor/bootstrap-icons/pause.svg)');
     M.hud.score(0);
     document.getElementById('tet-lines').textContent = '0';
     document.getElementById('tet-level').textContent = '1';
@@ -237,7 +242,7 @@
   }
 
   function gameOver() {
-    running = false;
+    running = false; pauseButton.disabled = true;
     clearTimeout(timer);
     G.update(function (d) {
       d.stats.games += 1;
@@ -259,19 +264,25 @@
   function togglePause() {
     if (!running) return;
     paused = !paused;
+    pauseButton.setAttribute('aria-label', paused ? '继续游戏' : '暂停游戏');
+    pauseButton.title = paused ? '继续游戏' : '暂停游戏';
+    var pauseIcon = pauseButton.querySelector('.ti');
+    if (pauseIcon) pauseIcon.style.setProperty('--icon', 'url(/static/vendor/bootstrap-icons/' + (paused ? 'play' : 'pause') + '.svg)');
     if (paused) {
       clearTimeout(timer);
       M.overlay(stage, {
-        title: '⏸ 小憩片刻',
+        title: '已暂停',
         lines: ['按 P 或点击按钮继续'],
         actions: [{ label: '继续', primary: true, onClick: togglePause }],
       });
     } else {
+      stage.querySelectorAll('.overlay').forEach(function (node) { node.remove(); });
       schedule();
     }
   }
 
   window.addEventListener('keydown', function (e) {
+    if (M.gamePaused()) return;
     if (!running || paused) {
       if (e.key === 'p' || e.key === 'P') togglePause();
       return;
@@ -286,12 +297,16 @@
     }
   });
 
+  var pauseButton = document.createElement('button');
+  pauseButton.type = 'button'; pauseButton.className = 'btn'; pauseButton.id = 'tetris-pause'; pauseButton.textContent = '暂停游戏'; pauseButton.disabled = true;
+  pauseButton.addEventListener('click', togglePause); M.hud.extra(pauseButton);
   M.onRestart(function () { start(); M.toast('已重新开始'); });
 
   var best0 = G.load().data.best;
   M.hud.best(best0.score || 0);
   M.overlay(stage, {
-    title: '俄罗斯方块',
+    intro: true,
+      title: '俄罗斯方块',
     lines: [
       '← → 移动，↑ 旋转，↓ 加速',
       '空格直落，P 暂停',

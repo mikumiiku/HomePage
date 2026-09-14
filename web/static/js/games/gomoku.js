@@ -59,6 +59,7 @@
   function fitBoard() {
     cancelAnimationFrame(fitFrame);
     fitFrame = requestAnimationFrame(function () {
+      if (stage.classList.contains("unified-stage")) return;
       var controls = el('board-controls'), reviewControls = el('review-controls');
       var noticeHeight = el('notice').hidden ? 0 : el('notice').offsetHeight + 12;
       var bottom = controls.hidden ? 0 : controls.offsetHeight + 10;

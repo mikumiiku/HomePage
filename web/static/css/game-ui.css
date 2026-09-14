@@ -1,0 +1,79 @@
+/* 单屏游戏工作区；长设置只在原生弹窗内部滚动。 */
+body.is-game { height: 100dvh; min-height: 0; overflow: hidden; }
+.is-game > .site-header { flex: 0 0 auto; padding-block: 8px; }
+.is-game > .site-footer { display: none; }
+.is-game .page { width: 100%; max-width: none; flex: 1; min-height: 0; padding: 0 12px max(8px, env(safe-area-inset-bottom)); }
+.is-game .game-shell { display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; max-width: none; margin: 0; padding: 0; }
+.is-game .game-shell > .game-title-row { display: none; }
+.is-game .game-shell > .back-link, .is-game .gomoku-back-row, .is-game .go-back-row { height: 36px; flex: 0 0 36px; margin: 0; }
+.is-game .game-back { width: 36px; height: 36px; padding: 8px; display: grid; place-items: center; }
+.game-back .ti { transform: rotate(180deg); }
+.game-icon-button { display: inline-grid; place-items: center; width: 44px; min-width: 44px; height: 44px; padding: 10px; }
+.game-icon-button .ti { width: 20px; height: 20px; background: currentColor; mask: var(--icon) center / contain no-repeat; -webkit-mask: var(--icon) center / contain no-repeat; }
+.is-game .hud { flex: 0 0 auto; width: fit-content; max-width: 100%; margin: 0 auto 8px; gap: 8px; padding: 0; }
+.is-game [hidden] { display: none !important; }
+.is-game .unified-stage { min-height: 0 !important; margin: 0 auto; max-width: 100%; flex: 0 0 auto; }
+.is-game .unified-stage:is(.gomoku-stage, .go-stage, .chess-stage, .fps-stage) { flex: 1; width: 100%; height: auto; min-height: 0; align-self: stretch; }
+.is-game :is(.gm-layout, .go-layout, .chess-layout) { position: relative; display: flex; flex: 1; min-height: 0; width: 100%; height: 100%; align-items: center; justify-content: center; gap: 8px; flex-direction: column; }
+.is-game :is(.gm-play, .go-play, .chess-play) { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; max-width: none; min-width: 0; margin: 0; }
+.is-game :is(.gm-board-area, .go-board-area) { width: 100%; gap: 6px; }
+.is-game :is(.gm-players, .go-players) { width: 100%; height: 52px; min-height: 52px; gap: 4px; grid-template-columns: minmax(0,1fr) minmax(70px,1.2fr) minmax(0,1fr) 44px; }
+.is-game :is(.gm-player, .go-player) { padding: 2px; gap: 4px; }
+.is-game :is(.gm-player, .go-player) b { font-size: 12px; }
+.is-game .gm-player div > span { display: none; }
+.is-game :is(.gm-disc, .go-disc) { width: 18px; height: 18px; }
+.is-game :is(.gm-status, .go-status) { font-size: 11px; margin: 0; }
+.is-game :is(.chess-player-name > b, .chess-player-turn, .chess-status-heading, #chess-detail) { display: none; }
+.is-game .chess-player { min-height: 36px; padding: 0; gap: 6px; width: 100%; }
+.is-game .chess-avatar { width: 28px; height: 28px; border: 0; background: none; }
+.is-game .chess-avatar img { width: 26px; height: 26px; }
+.is-game .chess-player.active { border-left: 3px solid var(--pond); }
+.is-game .chess-captured { max-width: none; flex-wrap: nowrap; overflow: hidden; }
+.is-game .game-live-controls { display: flex; flex-direction: row; justify-content: center; align-items: center; gap: 8px; padding: 0; border: 0; background: none; border-radius: 0; max-height: none; overflow: visible; width: auto; }
+.is-game .game-live-controls h3 { display: none; }
+.is-game .game-live-controls :is(.gm-actions, .go-actions, .chess-actions) { display: flex; flex-wrap: wrap; gap: 8px; }
+.is-game .game-live-controls .btn { min-width: 44px; margin: 0; }
+.is-game .game-side-controls .game-live-controls { position: absolute; left: calc(50% + var(--gm-size) / 2 + 12px); top: 50%; transform: translateY(-50%); width: 88px; flex-direction: column; }
+.is-game .game-side-controls .game-live-controls :is(.gm-actions, .go-actions, .chess-actions) { flex-direction: column; }
+.is-game .chess-current h2 { font: 12px/1.4 var(--font-body); min-height: 0; margin: 0 0 8px; text-align: center; }
+.is-game .chess-current { display: flex; flex-direction: column; align-items: center; }
+.is-game .gm-settings select, .is-game .go-side select { width: 100%; }
+.is-game .game-instructions { display: block; font-size: 13px; line-height: 1.7; margin: 16px 0; }
+.game-settings { width: min(480px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 0; border: 1px solid var(--rule); border-radius: 14px; background: var(--card); color: var(--ink); overflow: hidden; }
+.game-settings[open] { display: flex; flex-direction: column; }
+.game-settings::backdrop { background: var(--scrim); }
+.game-settings > header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--rule); flex-shrink: 0; }
+.game-settings h2 { margin: 0; font-size: 20px; }
+.game-settings-content { padding: 16px; overflow: auto; min-height: 0; overscroll-behavior: contain; }
+.game-settings-content > * + * { margin-top: 16px; }
+.game-settings-content h3 { font-size: 14px; }
+.is-game dialog .site-footer { display: block; padding: 12px 0 0; font-size: 11px; }
+.is-game .overlay { padding: 12px; }
+.is-game .overlay-card { padding: 16px; max-height: 100%; overflow: auto; }
+.is-game .canvas-frame canvas { max-width: 100%; }
+.is-game .tetris-wrap { position: relative; flex-direction: column; width: 100%; gap: 8px; align-items: stretch; }
+.is-game .tetris-wrap > .canvas-frame { flex: 0 0 auto; }
+.is-game .fps-viewport { position: absolute; inset: 0; height: 100%; min-height: 0; }
+.is-game .fps-stage:fullscreen { height: 100%; }
+@media (max-height: 500px) {
+  .is-game > .site-header { padding-block: 2px; }
+  .is-game :is(.gm-players, .go-players) { height: 44px; min-height: 44px; }
+  .is-game .chess-player { min-height: 28px; }
+}
+.is-game .unified-stage[data-game="memory"], .is-game .unified-stage[data-game="minesweeper"] { aspect-ratio: 1; }
+html:has(body.is-game) { scrollbar-gutter: auto; }
+.is-game .site-header .header-actions { margin-left: auto; }
+.is-game .site-header .game-back { width: 44px; height: 44px; }
+.is-game .fps-help .site-footer { display: block; padding: 12px 0 0; color: inherit; }
+.is-game .fps-stage[data-state="menu"] .overlay-title,
+.is-game .fps-stage[data-state="menu"] .overlay-lines { display: none; }
+.is-game .canvas-frame > canvas { margin-inline: auto; }
+/* WebGL 画布不参与父容器固有尺寸计算，避免 resize 时反复撑大舞台。 */
+.is-game .unified-stage.fps-stage { flex-basis: 0; }
+.is-game .tetris-side { flex-direction: row; align-items: center; width: 100%; height: 72px; min-width: 0; }
+.is-game .tetris-side .panel { flex: 1; min-width: 0; margin: 0; }
+.is-game .tetris-side .panel.next { padding: 4px; }
+.is-game .tetris-side canvas { max-width: 64px; max-height: 64px; margin: auto; }
+.is-game .game-tetris-wide .tetris-side { position: absolute; left: calc(100% + 8px); top: 0; width: 108px; height: auto; flex-direction: column; align-items: stretch; }
+
+.is-game .unified-stage.chess-stage { display: flex; flex-direction: column; }
