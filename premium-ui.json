@@ -1,0 +1,8 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": ["web/templates", "web/static/js", "web/static/css"],
+  "locale": "zh-CN",
+  "canonicalMap": "DESIGN.md",
+  "ownership": {"Select/Listbox": "native"},
+  "evidence": {"crudFullFlow": "tests/chat_test.py", "failurePaths": "tests/chat_test.py"}
+}

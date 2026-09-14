@@ -1,0 +1,120 @@
+/* Sandstrike: a quiet, scene-first combat HUD. Colours come from home.css. */
+.game-shell:has(.fps-stage) { max-width: 1320px; }
+.game-shell:has(.fps-stage) > .hud, .game-shell:has(.fps-stage) > .hint-line { display: none; }
+.stage.fps-stage { width: 100%; margin-top: 16px; border-radius: 8px; overflow: hidden; background: var(--fps-sky); isolation: isolate; }
+.fps-viewport { position: relative; width: 100%; height: clamp(540px, 78vh, 850px); overscroll-behavior: contain; user-select: none; color: var(--fps-ui); }
+.fps-canvas { display: block; width: 100%; height: 100%; touch-action: none; outline-offset: -4px; }
+.fps-sr, .fps-weapon-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.fps-status { position: absolute; inset: 22px 22px auto; pointer-events: none; text-shadow: 0 2px 6px var(--fps-hud-shadow); }
+.fps-mission { width: fit-content; min-width: 88px; margin: 0 auto; text-align: center; font-variant-numeric: tabular-nums; }
+.fps-clock { display: block; font-size: 25px; font-weight: 500; line-height: 1.25; }
+.fps-round { display: block; font-size: 11px; opacity: .72; margin-top: 4px; }
+.fps-objective { display: none; margin-top: 12px; font-size: 13px; }
+.fps-radar { position: absolute; top: 58px; left: 0; width: 160px; height: 160px; border: 1px solid var(--fps-hud-muted); border-radius: 50%; background: var(--fps-map); display: none; }
+.fps-tactical .fps-radar, .fps-tactical .fps-objective { display: block; }
+.fps-menu-button { position: absolute; left: 16px; top: 14px; width: 44px; height: 44px; border: 0; background: transparent; color: var(--fps-ui); opacity: .65; cursor: pointer; }
+.fps-menu-button span { display: block; width: 24px; height: 24px; margin: auto; background: currentColor; mask: url('/static/vendor/bootstrap-icons/pause.svg') center / contain no-repeat; -webkit-mask: url('/static/vendor/bootstrap-icons/pause.svg') center / contain no-repeat; }
+.fps-menu-button:hover { opacity: 1; background: var(--fps-hud-shadow); }
+.fps-menu-button:focus-visible, .fps-slots button:focus-visible, .fps-touch button:focus-visible { outline: 2px solid var(--fps-alert); outline-offset: -2px; }
+.fps-bottom { position: absolute; inset: auto 26px 22px; display: flex; justify-content: space-between; align-items: flex-end; pointer-events: none; text-shadow: 0 2px 8px var(--fps-hud-shadow); }
+.fps-stat { font-variant-numeric: tabular-nums; }
+.fps-vitals { min-width: 94px; }
+.fps-health { font-size: 38px; font-weight: 500; line-height: 1; }
+.fps-health-icon { font-size: 24px; vertical-align: 3px; margin-right: 12px; font-weight: 300; }
+.fps-healthbar { height: 2px; margin-top: 10px; background: var(--fps-hud-shadow); }
+.fps-healthbar i { display: block; height: 100%; background: var(--fps-ui); transition: width .15s; }
+.fps-low-health .fps-vitals { color: var(--fps-danger); }
+.fps-low-health .fps-healthbar i { background: var(--fps-danger); }
+.fps-rounds { text-align: right; min-width: 115px; }
+.fps-ammo { font-size: 42px; line-height: 1; font-weight: 500; }
+.fps-reserve { font-size: 17px; margin-left: 8px; color: var(--fps-hud-muted); }
+.fps-action-progress { height: 2px; margin-top: 10px; background: var(--fps-hud-shadow); opacity: 0; }
+.fps-action-progress i { display: block; height: 100%; background: var(--fps-alert); transform-origin: left; }
+.fps-slots { position: absolute; right: 18px; bottom: 104px; width: 198px; display: flex; flex-direction: column; gap: 2px; }
+.fps-slots button { position: relative; min-height: 44px; border: 0; border-right: 2px solid transparent; padding: 2px 27px 2px 12px; background: linear-gradient(90deg, transparent, var(--fps-hud-shadow)); color: var(--fps-ui); text-align: right; cursor: pointer; opacity: .48; transition: opacity .15s, background .15s; font: 11px var(--font-body); }
+.fps-slots button[aria-pressed="true"] { opacity: 1; border-right-color: var(--fps-alert); color: var(--fps-alert); }
+.fps-slots button:hover, .fps-selecting .fps-slots button, .fps-slots:focus-within button { opacity: 1; }
+.fps-slot-number { position: absolute; right: 8px; top: 12px; font-size: 12px; }
+.fps-slot-preview { display: block; height: 29px; width: 136px; margin-left: auto; background: currentColor; mask: var(--weapon-preview) center / contain no-repeat; -webkit-mask: var(--weapon-preview) center / contain no-repeat; }
+.fps-slot-label { display: block; height: 14px; line-height: 14px; visibility: hidden; }
+.fps-slots [aria-pressed="true"] .fps-slot-label, .fps-selecting .fps-slot-label, .fps-slots:focus-within .fps-slot-label { visibility: visible; }
+.fps-crosshair { position: absolute; left: 50%; top: 50%; width: 15px; height: 15px; transform: translate(-50%, -50%); color: var(--fps-ui); pointer-events: none; filter: drop-shadow(0 1px 2px var(--fps-hud-shadow)); }
+.fps-crosshair::before, .fps-crosshair::after { content: ''; position: absolute; background: currentColor; }
+.fps-crosshair::before { width: 1px; height: 15px; left: 7px; }
+.fps-crosshair::after { height: 1px; width: 15px; top: 7px; }
+.fps-crosshair.hit { transform: translate(-50%, -50%) rotate(45deg); }
+.fps-crosshair.kill { color: var(--fps-alert); }
+.fps-damage { position: absolute; inset: 0; box-shadow: inset 0 0 80px var(--fps-danger); opacity: 0; pointer-events: none; }
+.fps-message { position: absolute; top: 25%; left: 50%; transform: translateX(-50%); max-width: 80%; color: var(--fps-ui); text-shadow: 0 2px 8px var(--fps-hud-shadow); font-size: 19px; letter-spacing: 2px; text-align: center; pointer-events: none; }
+.fps-toolbar { position: absolute; inset: auto auto 24px 40px; display: flex; gap: 10px; z-index: 5; }
+.fps-toolbar .fps-loadout { display: none; }
+.fps-stage[data-state="playing"] .fps-toolbar { display: none; }
+.fps-reload { display: none; }
+.fps-stage:not([data-state="playing"]) .fps-pause, .fps-stage:not([data-state="playing"]) .fps-slots, .fps-stage:not([data-state="playing"]) .fps-touch { display: none; }
+.fps-stage:not([data-state="playing"]) .fps-status, .fps-stage:not([data-state="playing"]) .fps-bottom, .fps-stage:not([data-state="playing"]) .fps-message, .fps-stage:not([data-state="playing"]) .fps-crosshair { visibility: hidden; }
+.fps-stage .overlay { inset: 0; z-index: 3; padding: 40px 48px 100px; justify-content: flex-start; align-items: safe center; overflow: auto; background: linear-gradient(90deg, var(--fps-panel), var(--fps-hud-shadow) 45%, transparent); backdrop-filter: none; }
+.fps-stage .overlay-card { width: min(430px, 100%); max-width: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; text-align: left; color: var(--fps-ui); }
+.fps-stage .overlay-title { font: 600 clamp(32px, 4vw, 50px)/1.2 var(--font-body); letter-spacing: 2px; color: var(--fps-ui); margin-bottom: 20px; }
+.fps-stage .overlay-lines { font-size: 14px; line-height: 1.8; color: var(--fps-hud-muted); margin-bottom: 22px; }
+.fps-stage .overlay .choices { justify-content: flex-start; margin-top: 28px; }
+.fps-stage .btn { color: var(--fps-ui); background: var(--fps-hud-shadow); border-color: var(--fps-glass); }
+.fps-stage .btn:hover { background: var(--fps-panel); border-color: var(--fps-ui); }
+.fps-stage .btn.primary { color: var(--fps-rubber); background: var(--fps-alert); border-color: var(--fps-alert); font-weight: 600; }
+.fps-loadout { display: flex; align-items: center; gap: 16px; padding-top: 20px; border-top: 1px solid var(--fps-glass); font-size: 13px; }
+.fps-primary { color-scheme: dark; font: inherit; color: var(--fps-ui); background: var(--fps-panel); border: 1px solid var(--fps-glass); border-radius: 4px; min-height: 44px; padding: 9px 30px 9px 12px; }
+.fps-help { margin-top: 28px; font-size: 12px; color: var(--fps-hud-muted); }
+.fps-help summary { width: fit-content; cursor: pointer; padding: 8px 0; }
+.fps-help summary:hover { color: var(--fps-ui); }
+.fps-help p { line-height: 1.9; margin: 8px 0 0; }
+.fps-touch { position: absolute; inset: auto 14px 110px; display: none; justify-content: space-between; align-items: flex-end; pointer-events: none; }
+.fps-touch button, .fps-reload { pointer-events: auto; touch-action: none; min-width: 44px; min-height: 44px; border: 1px solid var(--fps-glass); border-radius: 50%; background: var(--fps-hud-shadow); color: var(--fps-ui); font: 12px var(--font-body); cursor: pointer; }
+.fps-touch button:active, .fps-touch button[aria-pressed="true"] { border-color: var(--fps-alert); color: var(--fps-alert); }
+.fps-touch button:disabled { opacity: .35; cursor: default; }
+.fps-dpad { display: grid; grid-template-columns: repeat(3, 44px); gap: 4px; }
+.fps-dpad button:first-child { grid-column: 2; }
+.fps-dpad button:nth-child(2) { grid-column: 1; }
+.fps-touch-actions { position: absolute; right: 0; bottom: 170px; display: grid; grid-template-columns: 50px 54px; gap: 6px; }
+.fps-touch-actions .fps-fire { width: 54px; height: 54px; border-color: var(--fps-ui); }
+.fps-scope { position: absolute; inset: 0; overflow: hidden; display: grid; place-items: center; pointer-events: none; }
+.fps-scope-lens { position: relative; width: min(650px, 86%, var(--fps-scope-size, 420px)); aspect-ratio: 1; border: 4px solid var(--fps-rubber); border-radius: 50%; box-shadow: 0 0 0 100vmax var(--fps-rubber), inset 0 0 30px var(--fps-hud-shadow); }
+.fps-scope-lens::before, .fps-scope-lens::after { content: ''; position: absolute; background: var(--fps-rubber); }
+.fps-scope-lens::before { width: 1px; height: 100%; left: 50%; }
+.fps-scope-lens::after { width: 100%; height: 1px; top: 50%; }
+.fps-scope-lens span { position: absolute; top: 70%; left: 53%; color: var(--fps-rubber); font-size: 12px; }
+.fps-scope[hidden], .fps-crosshair[hidden], .fps-message[hidden] { display: none; }
+.fps-stage:fullscreen { border-radius: 0; display: flex; }
+.fps-stage:fullscreen .fps-viewport { height: 100%; min-height: 0; }
+@media (pointer: coarse), (max-width: 650px) {
+  .fps-viewport { height: max(620px, 80svh); }
+  .fps-touch { display: flex; }
+  .fps-status { top: 16px; }
+  .fps-clock { font-size: 21px; }
+  .fps-bottom { inset: auto 16px 20px; }
+  .fps-health { font-size: 32px; }
+  .fps-ammo { font-size: 36px; }
+  .fps-health-icon { margin-right: 7px; }
+  .fps-vitals { min-width: 80px; }
+  .fps-slots { right: 10px; bottom: 92px; width: 148px; }
+  .fps-slot-preview { width: 106px; height: 25px; }
+  .fps-slots button { min-height: 44px; padding-right: 25px; }
+  .fps-slot-label { font-size: 10px; }
+  .fps-reload { display: block; position: absolute; left: 122px; bottom: 20px; }
+  .fps-stage:not([data-state="playing"]) .fps-reload { display: none; }
+  .fps-stage .overlay { padding: 26px 24px 88px; }
+  .fps-stage .overlay-title { font-size: 36px; }
+  .fps-toolbar { left: 24px; bottom: 20px; }
+  .fps-message { font-size: 16px; }
+}
+@media (max-height: 540px) and (orientation: landscape) {
+  .fps-viewport { height: min(440px,100svh); }
+  .fps-stage:fullscreen .fps-viewport { height: 100%; }
+  .fps-touch { bottom: 72px; }
+  .fps-touch-actions { right: 156px; bottom: 12px; }
+  .fps-slots { bottom: 80px; }
+  .fps-stage .overlay { padding: 20px 28px 76px; }
+  .fps-stage .overlay-title { font-size: 30px; margin-bottom: 14px; }
+  .fps-stage .overlay .choices { margin-top: 16px; }
+  .fps-loadout { padding-top: 12px; }
+  .fps-help { margin-top: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .fps-slots button, .fps-healthbar i { transition: none; } }

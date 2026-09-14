@@ -1,0 +1,164 @@
+/* 围棋专用布局；颜色全部来自 home.css 顶部的亮暗主题 tokens。 */
+.is-go { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+.is-go > .site-header { flex-shrink: 0; }
+.is-go > .site-footer { display: none; }
+.is-go .page { flex: 1; min-height: 0; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+.is-go .go-shell { flex: 1; min-height: 0; width: 100%; max-width: 1160px; margin: 0 auto; padding: 24px 0 0; display: flex; flex-direction: column; }
+.go-back-row { flex-shrink: 0; margin-bottom: 14px; }
+.go-shell > .game-title-row, .go-shell > .hint-line, .go-shell > #hud { display: none; }
+.go-stage { width: calc(100vw - 2 * var(--pad-x)); max-width: none; align-self: center; flex: 1; min-height: 0; margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.go-shell #hud[hidden], .go-stage [hidden] { display: none !important; }
+.go-layout { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; }
+.go-play { display: grid; grid-template-columns: minmax(0, var(--go-size, 70vmin)); gap: 10px; align-items: center; }
+.go-board-area { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.go-players { min-height: 72px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(84px, 1fr) minmax(0, 1fr) 44px; align-items: center; gap: 10px; }
+.go-side-info .go-play { grid-template-columns: minmax(0, var(--go-size)) 280px; grid-template-rows: minmax(72px, auto) auto; column-gap: 24px; row-gap: 10px; }
+.go-side-info .go-players { grid-column: 1; grid-row: 1; }
+.go-side-info .go-board-area { grid-column: 1; grid-row: 2; }
+.go-side-info .go-controls { grid-column: 2; grid-row: 1 / 3; align-self: center; max-height: calc(82px + var(--go-size)); overflow-y: auto; }
+
+.go-player { min-width: 0; display: flex; gap: 10px; align-items: center; border-bottom: 3px solid transparent; padding: 8px 4px; }
+.go-player.active { border-color: var(--pond); }
+.go-player b { display: block; overflow-wrap: anywhere; font-size: 17px; font-weight: 600; }
+.go-player div > span, #go-count { display: block; color: var(--ink-soft); white-space: nowrap; font-size: 12px; }
+.go-turn { min-width: 0; text-align: center; }
+.go-status { margin-top: 4px; color: var(--ink); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.go-disc { display: inline-block; width: 27px; height: 27px; border-radius: 50%; flex: 0 0 auto; }
+.go-disc.black, .go-cell.black .go-stone, .go-loupe-point.black::after { background: radial-gradient(circle at 32% 25%, var(--go-black-light), var(--go-black) 70%); border: 1px solid var(--go-black-light); color: var(--go-on-black); }
+.go-disc.white, .go-cell.white .go-stone, .go-loupe-point.white::after { background: var(--go-white); border: 1px solid var(--go-white-edge); color: var(--go-on-white); }
+.go-settings-trigger { width: 44px; height: 44px; display: grid; place-items: center; padding: 0; background: var(--card); }
+.go-settings-trigger .ti { width: 20px; height: 20px; }
+
+.go-board-frame { position: relative; width: 100%; padding: 28px 14px 14px 28px; background: var(--go-board); border: 1px solid var(--go-board-edge); border-radius: 10px; box-shadow: 0 12px 34px var(--shadow); }
+.go-board { position: relative; width: 100%; aspect-ratio: 1; display: grid; grid-template-rows: repeat(var(--go-lines), 1fr); touch-action: pan-y pinch-zoom; user-select: none; -webkit-user-select: none; }
+.go-row { display: grid; grid-template-columns: repeat(var(--go-lines), 1fr); min-height: 0; }
+.go-cell { position: relative; min-width: 0; min-height: 0; isolation: isolate; -webkit-tap-highlight-color: transparent; }
+.go-cell::before, .go-cell::after { content: ''; position: absolute; z-index: -2; background: var(--go-grid); pointer-events: none; }
+.go-cell::before { top: 50%; left: 0; right: 0; height: 1px; }
+.go-cell::after { left: 50%; top: 0; bottom: 0; width: 1px; }
+.go-cell:first-child::before { left: 50%; }
+.go-cell:last-child::before { right: 50%; }
+.go-row:first-child .go-cell::after { top: 50%; }
+.go-row:last-child .go-cell::after { bottom: 50%; }
+.go-cell.star { background: radial-gradient(circle at center, var(--go-grid) 0 2.5px, transparent 3px); }
+.go-stone { position: absolute; inset: 7%; z-index: 2; border-radius: 50%; display: grid; place-items: center; font-size: clamp(7px, calc(var(--go-size) / 48), 18px); font-family: var(--font-body); font-variant-numeric: tabular-nums; line-height: 1; }
+.go-cell.black .go-stone, .go-cell.white .go-stone { box-shadow: 0 2px 4px var(--shadow); animation: go-place 150ms ease-out both; }
+.go-cell.last .go-stone { outline: 2px solid var(--go-last); outline-offset: 1px; }
+.go-cell.last .go-stone::after { content: ''; position: absolute; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.go-cell.last .go-stone:not(:empty)::after { display: none; }
+.go-cell.preview .go-stone { background: var(--card); border: 2px dashed var(--go-preview); opacity: .88; }
+.go-cell.preview .go-stone::after { content: '+'; color: var(--ink); font-size: clamp(13px, calc(var(--go-size) / 30), 22px); }
+.go-cell.dead .go-stone { opacity: .42; }
+.go-cell.dead .go-stone::before, .go-cell.dead .go-stone::after { content: ''; position: absolute; width: 72%; height: 2px; border-radius: 2px; background: var(--go-dead); }
+.go-cell.dead .go-stone::before { transform: rotate(45deg); }
+.go-cell.dead .go-stone::after { transform: rotate(-45deg); }
+.go-cell.dead.last .go-stone::after { display: block; width: 72%; height: 2px; border-radius: 2px; }
+.go-area-marker { position: absolute; z-index: 1; inset: 34%; pointer-events: none; }
+.go-cell.black-area .go-area-marker { border-radius: 50%; background: var(--go-black-area); }
+.go-cell.white-area .go-area-marker { border-radius: 2px; border: 2px solid var(--go-white-area); box-shadow: 0 0 0 1px var(--go-grid); }
+.go-cell:focus-visible { z-index: 4; outline: 2px solid var(--ink); outline-offset: -2px; border-radius: 3px; }
+.go-enabled .go-cell:not(.black):not(.white), .go-scoring-mode .go-cell.black, .go-scoring-mode .go-cell.white { cursor: pointer; }
+@media (hover: hover) {
+  .go-enabled[data-turn="1"] .go-cell:not(.black):not(.white):hover .go-stone { background: var(--go-black); opacity: .25; }
+  .go-enabled[data-turn="2"] .go-cell:not(.black):not(.white):hover .go-stone { background: var(--go-white); opacity: .66; }
+  .go-scoring-mode .go-cell.black:hover .go-stone, .go-scoring-mode .go-cell.white:hover .go-stone { filter: brightness(.9); }
+}
+.go-axis { position: absolute; color: var(--ink-soft); font-size: clamp(6px, calc((var(--go-size) - 42px) / 48), 11px); line-height: 1; text-align: center; pointer-events: none; }
+.go-axis-top { top: 7px; left: 28px; right: 14px; display: grid; grid-template-columns: repeat(var(--go-lines), 1fr); }
+.go-axis-left { left: 3px; width: 20px; top: 28px; bottom: 14px; display: grid; grid-template-rows: repeat(var(--go-lines), minmax(0, 1fr)); align-items: center; }
+
+.go-controls { padding: 20px; border: 1px solid var(--rule); border-radius: 12px; background: var(--card); min-width: 0; }
+.go-side { display: flex; flex-direction: column; gap: 22px; }
+.go-side h3 { margin: 0 0 14px; font-family: var(--font-body); font-size: 16px; font-weight: 600; }
+.go-new-settings { padding-top: 20px; border-top: 1px solid var(--rule); }
+.go-new-fields { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 10px 8px; align-items: center; }
+.go-new-fields .go-ai-settings { display: contents; }
+.go-new-fields label, .go-settings-scroll section > label:not(.go-check) { color: var(--ink-soft); font-size: 13px; }
+.go-controls select, .go-settings-scroll select { display: block; width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--card); color: var(--ink); font: inherit; font-size: 14px; color-scheme: inherit; }
+.go-settings-scroll section > label:not(.go-check) { display: block; margin: 12px 0 6px; }
+.go-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.go-actions .btn { min-width: 96px; }
+.go-session-actions .go-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.go-session-actions .go-actions .btn { min-width: 0; }
+.go-session-actions #go-resign, .go-session-actions #go-review { grid-column: 1 / -1; }
+.go-new { width: 100%; }
+.go-small { margin: 8px 0 12px; color: var(--ink-soft); font-size: 12px; line-height: 1.6; }
+.go-danger { border-color: var(--go-dead); color: var(--go-dead); }
+.go-stage .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.go-board-controls { min-height: 44px; display: flex; justify-content: center; gap: 10px; }
+.go-precision { display: flex; align-items: center; justify-content: center; gap: 18px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--go-loupe); box-shadow: 0 8px 24px var(--shadow); }
+.go-precision > div:first-child { min-width: 72px; text-align: center; }
+.go-precision b { display: block; font-family: var(--font-display); font-size: 24px; font-weight: 400; }
+.go-precision span { color: var(--ink-soft); font-size: 12px; }
+.go-loupe { width: 140px; height: 140px; padding: 8px; display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(5, 1fr); background: var(--go-board); border: 1px solid var(--go-board-edge); border-radius: 8px; }
+.go-loupe-point { position: relative; background: linear-gradient(var(--go-grid), var(--go-grid)) center / 100% 1px no-repeat, linear-gradient(var(--go-grid), var(--go-grid)) center / 1px 100% no-repeat; }
+.go-loupe-point::after { content: ''; position: absolute; }
+.go-loupe-point.black::after, .go-loupe-point.white::after { inset: 8%; border-radius: 50%; }
+.go-loupe-point.selected { outline: 2px solid var(--go-last); outline-offset: -2px; }
+.go-loupe-point.outside { opacity: .18; }
+
+.go-scoring { padding: 14px 16px; border: 1px solid var(--rule); border-radius: 12px; background: var(--card); }
+.go-score { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; text-align: center; font-size: 14px; }
+.go-score b { display: inline-block; min-width: 42px; font-size: 18px; font-variant-numeric: tabular-nums; }
+.go-score strong { grid-column: 1 / -1; margin-top: 3px; font-size: 14px; }
+.go-scoring p { margin: 10px 0; color: var(--ink-soft); font-size: 13px; line-height: 1.6; text-align: center; }
+.go-review { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; align-items: center; }
+.go-review [data-review="exit"] { grid-column: 1 / -1; }
+.go-review .btn { min-width: 0; padding-inline: 2px; font-size: 12px; }
+#go-review-count { min-width: 56px; font-size: 13px; text-align: center; }
+
+.go-notice { width: 100%; max-width: 720px; margin: 0 0 12px; padding: 12px 16px; border: 1px solid var(--rule); border-radius: 8px; background: var(--card); font-size: 14px; }
+.go-notice .btn { margin: 8px 8px 0 0; }
+.go-dialog { max-width: min(440px, calc(100vw - 32px)); max-height: 92dvh; padding: 26px; border: 1px solid var(--rule); border-radius: 14px; background: var(--card); color: var(--ink); }
+.go-dialog::backdrop { background: var(--scrim); }
+.go-dialog h2 { margin-top: 0; font-size: 22px; }
+.go-dialog p { line-height: 1.8; }
+.go-settings-dialog { width: min(480px, calc(100vw - 24px)); max-width: none; max-height: min(820px, calc(100dvh - 24px)); padding: 0; border: 1px solid var(--rule); border-radius: 14px; background: var(--card); color: var(--ink); box-shadow: 0 18px 44px var(--shadow); overflow: hidden; }
+.go-settings-dialog[open] { display: flex; flex-direction: column; }
+.go-settings-dialog::backdrop { background: var(--scrim); }
+.go-panel-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex: 0 0 auto; padding: 14px 20px; border-bottom: 1px solid var(--rule); }
+.go-panel-header h2 { margin: 0; font-size: 20px; }
+.go-settings-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; scrollbar-gutter: stable; }
+.go-settings-notice { margin: 0 0 16px; padding: 12px; border: 1px solid var(--rule); border-radius: 8px; font-size: 13px; line-height: 1.6; }
+.go-check { display: flex; align-items: center; gap: 8px; min-height: 40px; margin-top: 10px; font-size: 14px; cursor: pointer; }
+.go-check input { width: 17px; height: 17px; accent-color: var(--pond); }
+.go-history-section summary { display: flex; justify-content: space-between; margin-bottom: 10px; }
+#go-game-kind { color: var(--ink-soft); font-size: 12px; font-weight: 400; }
+.go-history { position: relative; margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: 1fr 1fr; max-height: 240px; overflow-y: auto; scrollbar-gutter: stable; font-variant-numeric: tabular-nums; }
+.go-history li { padding: 6px 4px; border-bottom: 1px solid var(--rule); font-size: 13px; }
+.go-history .go-future { opacity: .45; }
+.go-history .go-current { background: var(--go-board); font-weight: 600; }
+.go-side details { padding-top: 14px; border-top: 1px solid var(--rule); font-size: 13px; }
+.go-side summary { min-height: 32px; cursor: pointer; font-size: 14px; }
+.go-side details p { line-height: 1.8; }
+#go-credits .site-footer { display: block; width: 100%; max-width: none; margin: 0; padding: 12px 0 0; }
+#go-credits .site-footer p { margin: 0; font-size: 11px; }
+@keyframes go-place { from { transform: scale(.72); opacity: .45; } to { transform: scale(1); opacity: 1; } }
+
+@media (max-width: 899px) {
+  .is-go { height: auto; min-height: 100dvh; overflow: auto; }
+  .is-go .go-stage { flex: none; }
+  .go-controls { padding: 16px; }
+  .go-controls h3 { margin-bottom: 10px; font-size: 14px; }
+  .go-new-settings { padding-top: 16px; }
+}
+@media (max-width: 500px) {
+  .go-players { gap: 4px; grid-template-columns: minmax(0, 1fr) minmax(76px, 1fr) minmax(0, 1fr) 44px; }
+  .go-player { gap: 4px; padding: 8px 0; }
+  .go-player b { font-size: 13px; }
+  .go-player div > span, #go-count { font-size: 9px; }
+  .go-disc { width: 19px; height: 19px; }
+  .go-status { font-size: 11px; }
+  .go-cell.last .go-stone { outline-width: 1px; }
+  .go-panel-header { padding: 12px 16px; }
+  .go-settings-scroll { padding: 16px; }
+  .go-score { gap: 4px 8px; }
+}
+@media (min-width: 700px) and (max-height: 500px) {
+  .is-go { overflow: auto; }
+  .go-stage { height: 350px; min-height: 350px; flex: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .go-stage *, .go-stage *::before, .go-stage *::after { animation: none !important; transition: none !important; }
+}
