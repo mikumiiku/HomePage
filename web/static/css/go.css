@@ -99,6 +99,10 @@
 .go-loupe-point.outside { opacity: .18; }
 
 .go-scoring { padding: 14px 16px; border: 1px solid var(--rule); border-radius: 12px; background: var(--card); }
+/* 横屏手机高度不足时，计分与确认面板内部滚动，否则它们会把棋盘压到尺寸下限并溢出舞台。 */
+@media (max-height: 480px) {
+  .go-scoring, .go-board-controls { max-height: 34dvh; overflow-y: auto; overscroll-behavior: contain; }
+}
 .go-score { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; text-align: center; font-size: 14px; }
 .go-score b { display: inline-block; min-width: 42px; font-size: 18px; font-variant-numeric: tabular-nums; }
 .go-score strong { grid-column: 1 / -1; margin-top: 3px; font-size: 14px; }
