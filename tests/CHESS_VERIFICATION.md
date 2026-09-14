@@ -7,3 +7,5 @@
 - 浏览器截图输出 `/tmp/chess-verification/`。所有测试使用独立上下文和预览服务，不读取真实用户存档。
 - Premium strict 静态扫描报告 `/tmp/chess-ui-audit-final-output.txt`：国际象棋文件无发现；项目现有 21 项 actionless-button 检测仍存在，涉及聊天、射击和公共模板的动态绑定，非本次新增国际象棋按钮。本次不扩大修改其他应用，也不将全站静态扫描宣称为通过。
 - 规则采用 chess.js 0.10.3；三次重复与五十回合在休闲对局中自动判和，界面已说明。电脑为本地限时搜索，未声明 Elo 或专业棋力。
+- `python3 tests/chess_failure_test.py` 通过：Worker 不可用时快速合法回应；localStorage 不可用时明确提示且仍可对局。
+- 已执行面板 HomePage restart；面板返回成功后端口未监听，按 README 既有方案执行 `systemctl restart homepage-panel-launch`，8023 healthz 返回 ok。公网 http://<服务器地址>/game/chess 独立浏览器复核 HTTP 200、64 格棋盘、白方 e4 与电脑回应均通过，无浏览器错误。
