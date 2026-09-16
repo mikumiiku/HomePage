@@ -93,9 +93,20 @@ for (const size of [9, 13, 19]) for (const level of ['easy', 'normal', 'hard']) 
   });
 }
 
-test('AI takes an immediate capture', () => {
-  const result = AI.choose({ size: 9, moves: [2, 1, 10, 9], level: 'hard', seed: 1, budget: 100 });
-  assert.equal(result.move, 0);
+test('searching levels take a clean atari capture', () => {
+  /* black 1, white 0: the white corner stone only breathes at 9. */
+  for (const level of ['normal', 'hard']) {
+    const result = AI.choose({ size: 9, moves: [1, 0], level, seed: 7, budget: 300 });
+    assert.equal(result.move, 9, `${level} should capture at 9`);
+  }
+});
+
+test('the searching levels really run playouts', () => {
+  for (const level of ['normal', 'hard']) {
+    const result = AI.choose({ size: 9, moves: [40], level, seed: 5, budget: 250 });
+    assert(result.nodes > 200, `${level} searched ${result.nodes} nodes`);
+    assert(result.elapsed < 900, `${level} took ${result.elapsed}ms`);
+  }
 });
 
 test('seeded easy play is reproducible', () => {

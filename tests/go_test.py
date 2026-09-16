@@ -80,6 +80,13 @@ def close_settings(page):
         page.locator("#go-close-settings").click()
 
 
+def open_settings(page):
+    """New-game options live inside the settings dialog in the current layout."""
+    if not page.locator("#go-settings-dialog").evaluate("element => element.open"):
+        page.locator("#go-open-settings").click()
+    expect(page.locator("#go-settings-dialog")).to_be_visible()
+
+
 def play_point(page, point):
     close_settings(page)
     page.locator(f"#go-cell-{point}").click()
@@ -124,10 +131,12 @@ with sync_playwright() as playwright:
     context.close()
 
     context, page = setup(browser)
+    open_settings(page)
     page.locator("#go-color").select_option("white")
     page.locator("#go-size").select_option("13")
     page.locator("#go-level").select_option("easy")
     page.locator("#go-new").click()
+    close_settings(page)
     page.wait_for_function("document.querySelectorAll('.go-cell.black').length === 1", timeout=8000)
     assert page.locator(".go-cell").count() == 169
     assert saved(page)["session"]["human"] == 2
@@ -158,7 +167,9 @@ with sync_playwright() as playwright:
     assert saved(page)["session"]["moves"] == ended_moves
     page.reload()
     assert saved(page)["stats"]["buckets"]["local:9"]["wins"] == 1
+    open_settings(page)
     page.locator("#go-review").click()
+    close_settings(page)
     page.locator('[data-review="first"]').click()
     assert stone_count(page) == 0
     page.locator('[data-review="last"]').click()
@@ -178,6 +189,7 @@ with sync_playwright() as playwright:
     assert saved(page)["session"]["phase"] == "play"
     play_point(page, 2)
     assert saved(page)["session"]["moves"][-1] == 2
+    open_settings(page)
     page.locator("#go-resign").click()
     expect(page.locator("#go-resign-dialog")).to_be_visible()
     page.keyboard.press("Escape")
@@ -203,6 +215,7 @@ with sync_playwright() as playwright:
     }""")
     assert stone_count(page) == 0
     play_point(page, 40)
+    open_settings(page)
     page.locator("#go-new").click()
     page.locator("#go-accept-new").click()
     page.evaluate("""() => {
@@ -280,8 +293,10 @@ with sync_playwright() as playwright:
 
     for width, height in [(320, 568), (375, 812), (768, 1024), (844, 390)]:
         context, page = setup(browser, width=width, height=height, mobile=True)
+        open_settings(page)
         page.locator("#go-size").select_option("19")
         page.locator("#go-new").click()
+        close_settings(page)
         if width == 375:
             cdp = context.new_cdp_session(page)
             box = page.locator("#go-cell-140").bounding_box()
