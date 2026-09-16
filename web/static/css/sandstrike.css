@@ -1,7 +1,7 @@
 /* Sandstrike: a quiet, scene-first combat HUD. Colours come from home.css. */
 .game-shell:has(.fps-stage) { max-width: 1320px; }
 .game-shell:has(.fps-stage) > .hud, .game-shell:has(.fps-stage) > .hint-line { display: none; }
-.stage.fps-stage { width: 100%; margin-top: 16px; border-radius: 8px; overflow: hidden; background: var(--fps-sky); isolation: isolate; }
+.stage.fps-stage { width: 100%; margin-top: 16px; border-radius: 0; overflow: hidden; background: var(--fps-sky); isolation: isolate; }
 .fps-viewport { position: relative; width: 100%; height: clamp(540px, 78vh, 850px); overscroll-behavior: contain; user-select: none; color: var(--fps-ui); }
 .fps-canvas { display: block; width: 100%; height: 100%; touch-action: none; outline-offset: -4px; }
 .fps-sr, .fps-weapon-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -71,7 +71,7 @@
 .fps-stage .btn:hover { background: var(--fps-panel); border-color: var(--fps-ui); }
 .fps-stage .btn.primary { color: var(--fps-rubber); background: var(--fps-alert); border-color: var(--fps-alert); font-weight: 600; }
 .fps-loadout { display: flex; align-items: center; gap: 16px; padding-top: 20px; border-top: 1px solid var(--fps-glass); font-size: 13px; }
-.fps-primary { color-scheme: dark; font: inherit; color: var(--fps-ui); background: var(--fps-panel); border: 1px solid var(--fps-glass); border-radius: 4px; min-height: 44px; padding: 9px 30px 9px 12px; }
+.fps-primary { color-scheme: dark; font: inherit; color: var(--fps-ui); background: var(--fps-panel); border: 1px solid var(--fps-glass); border-radius: var(--radius-1); min-height: 44px; padding: 9px 30px 9px 12px; }
 .fps-help { margin-top: 28px; font-size: 12px; color: var(--fps-hud-muted); }
 .fps-help summary { width: fit-content; cursor: pointer; padding: 8px 0; }
 .fps-help summary:hover { color: var(--fps-ui); }

@@ -7,8 +7,8 @@ Go 实现的自制小游戏站：设备自动适配（手机/电脑）、莫奈�
 - 技术栈：Go 标准库（`net/http` + `html/template` + `go:embed`，无第三方依赖），前端原生 JS
 - 10 个小游戏：国际象棋（通用）、五子棋（通用）、围棋（通用）、沙城突击（3D 枪战，通用）、2048（通用）、贪吃蛇（通用）、记忆翻牌（通用）、扫雷（通用）、俄罗斯方块（电脑/键盘）、指尖快划（手机/触屏）
 - 亮暗模式：全站 token 化，右上角太阳/月亮切换（动画交叉旋转），跟随系统 + 手动持久化（app:appearance 槽位）
-- 主页背景：默认采用自托管油画底图，页面淡化呈现笔触、卡片使用纯色，右上角半透明按钮上传图片，Cropper.js 框选裁剪后存 localStorage（app:appearance 槽位）
-- 站点结构：`/` 导航页（`games.go` 的 `navItems` 注册入口）→ `/games/` 小游戏集合 → `/game/<id>` 游戏页；另有 `/about`；导航页「AI 对话」卡片指向 `/home`（浏览器直连）
+- 主页背景：亮色为自托管《撑伞的女人》画风原创油画、暗色为克利夫兰艺术博物馆 CC0 的《睡莲》1907，画作只在主页通栏出现一次，其余页面底纹降到纸纹级别；右上角方形按钮上传图片，Cropper.js 框选裁剪后存 localStorage（app:appearance 槽位）
+- 站点结构：`/` 导航页（`games.go` 的 `navItems` 注册入口）→ `/games/` 小游戏集合 → `/game/<id>` 游戏页；另有 `/about`；导航页「AI 对话」目录行指向 `/home`（浏览器直连）
 - 游戏图标来自 [game-icons.net](https://game-icons.net/)（Lorc、Delapouite、Faithtoken，CC BY 3.0），已去除图标自带的黑色底以适配 CSS mask 着色
 
 > 注意：宝塔全局 `proxy.conf` 默认开启 `proxy_cache`，两个站点 vhost 已显式 `proxy_cache off`；
@@ -93,7 +93,7 @@ OpenWebUI 容器、数据卷、镜像、旧凭据文件、定制脚本和 3000 �
    `M.hud` 更新计分、`M.overlay` 做开始/结束画面，`M.onSwipe` / `M.onDirectionKeys` 接输入。
 4. `go build -o bin/homepage . && systemctl restart HomePage`。
 
-首页卡片最佳成绩、设备过滤、「最近在玩」条都是自动的。
+首页目录行的最佳成绩、设备过滤、「最近在玩」条都是自动的（没有纪录的成绩不显示）。
 
 ## 接口
 

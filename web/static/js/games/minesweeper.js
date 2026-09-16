@@ -337,7 +337,7 @@
       ],
       actions: [
         { label: '简单 9×9', primary: true, onClick: function () { setup('easy'); } },
-        { label: '困难 16×16', primary: true, onClick: function () { setup('hard'); } },
+        { label: '困难 16×16', onClick: function () { setup('hard'); } },
       ],
     });
   }

@@ -24,7 +24,10 @@
 })();
 </script>
 <link rel="stylesheet" href="/static/css/home.css?v={{.Ver}}">
-<style>:root { --oil-painting: url("/static/img/monet-meadow.png?v={{.Ver}}"); }</style>
+<style>:root {
+  --oil-painting: url("/static/img/monet-meadow.png?v={{.Ver}}");
+  --oil-painting-dark: url("/static/img/monet-waterlilies.jpg?v={{.Ver}}");
+}</style>
 {{block "extra_head" .}}{{end}}
 </head>
 <body{{if eq .Title "主页"}} class="is-home"{{else if eq .Title "AI 对话"}} class="is-chat"{{else if eq .Game.ID "gomoku"}} class="is-gomoku"{{else if eq .Game.ID "go"}} class="is-go"{{end}}>

@@ -1,34 +1,40 @@
 ---
-version: alpha
+version: alpha-2
 name: 主页
-description: 个人应用入口与小游戏集合，采用真实油画笔触与低对比页面底纹。
+description: 一馆两室——亮色《撑伞的女人》（户外），暗色《睡莲》（池面）。结构一律直角，目录行代替卡片，印刷体数字。
 colors:
-  primary: "#306838"
-  background: "#e7f0ef"
-  surface: "#f7faf4"
-  text: "#21392c"
-  secondary: "#4c6d70"
-  sky: "#64a8d6"
-  gold: "#bfa64f"
+  primary: "#2a679c"      # 亮色强调：钴蓝，取自天空
+  background: "#e7e9e3"   # 云层暖白偏冷
+  surface: "#f2f3ee"      # 只给浮起的面（对话框、覆盖层卡片）
+  text: "#1b2a22"         # 深草影绿黑
+  secondary: "#4d5f52"
+  sky: "#4d94cd"
+  gold: "#adab71"         # 橄榄金：只做色块，不当正文
+  dark-primary: "#7cc4da" # 暗色强调：水面高光的青蓝
+  dark-background: "#131b20"
+  dark-surface: "#1e2b33"
+  dark-text: "#e3e2ea"
 typography:
-  sans:
-    fontFamily: 'PingFang SC, Microsoft YaHei, sans-serif'
-  display:
-    fontFamily: 'Noto Serif CJK SC, Songti SC, SimSun, serif'
+  sans: 'PingFang SC, Microsoft YaHei, sans-serif'
+  display: '"EB Garamond"（拉丁与数字子集，自托管）, Noto Serif CJK SC, Songti SC, SimSun, serif'
+  figures: oldstyle-nums
 rounded:
-  sm: 8px
-  md: 14px
-  lg: 24px
+  structural: 0          # 结构一律直角：不写 border-radius
+  control: var(--radius-1)  # 2px，仅表单控件与滚动条
+  round: 999px           # 仅真实圆形物体：棋子、雷达、头像、进度条
 spacing:
   page-max: 1240px
-  card-gap: 16px
+  scale: "--space-1..8 = 4/8/12/16/24/32/48/64（组内紧、组间松）"
 components:
   button:
     min-height: 44px
-  card:
-    padding: 28px
+    radius: 0
+  catalogue-row:
+    padding: 16px 0
+    separator: 1px hairline
   dialog:
     max-height: 92dvh
+    shadow: 一档，仅浮层
 ---
 
 # 主页设计约定
@@ -36,18 +42,21 @@ components:
 ## 方向与产品背景
 用户明确偏好莫奈的印象派笔触和《撑伞的女人》的配色：明亮蓝天、乳白云层、黄绿草地、深绿阴影和少量金色。油画感来自有方向的笔触和颜色交叠；禁止用重复 SVG feTurbulence 噪点模拟画布，也不使用平面几何弧线代替油画。个人工具入口与小游戏以中文内容清晰、手机和 iPad 显示稳定为优先。站点名称「主页」，集合名称「小游戏」。
 
+**2026-09-16 一馆两室重做**：站点是一间收藏室——墙上挂一幅画，下面是一份作品目录。亮色是户外（撑伞的女人），暗色是池面（睡莲），主题切换是换一间房，不是「深色模式」；主题按钮的可访问名称为「切换到睡莲」/「切换到草地」。反 AI 味三条硬规矩：**结构一律直角**（圆角只留给真实圆形物体与 2px 的表单控件）；**不用卡片表达分组**（细线 + 留白，只有真正浮起的浮层才有面与阴影）；**把大胆只花在一处**（画作只在主页出现一次，其余页面是纸面 + 墨色 + 一个强调色）。入场动画一律不做，动效只回答用户的操作（悬停细线加深、名称横移 2px、图标显色）。禁止拉字距的 CJK 小标签、中间点连接的元信息串、以及逐段浮现的入场序列——这些是通用生成式观感。
+
 ## 背景与表面
-自托管 monet-meadow.png 是参考《撑伞的女人》笔触和色彩生成的原创草地天空画面，并非原作复刻。主页展示完整画面，白色标题与底部遮罩保证可读性；深色模式叠加 painting-tone 降低画面亮度。页面共用单张固定视口底图，通过 painting-opacity 在浅色 12%、深色 5.5% 呈现柔和笔触，不重复平铺，不随长页面拉伸。聊天页底纹再降至公共透明度的 65%；卡片和表单保留实色以维持可读性。
-底图 URL 在 layout.html 使用二进制版本指纹提供给 --oil-painting；home.css 是背景透明度、主题遮罩与界面色彩的唯一 owner。沿用从莫奈画作取色的原有界面 tokens、字体、操作色、布局和自定义图片流程。图片与生成提示词来源见 web/static/img/monet-meadow-SOURCES.md。
+亮色底图 `monet-meadow.png` 是参考《撑伞的女人》笔触与色彩生成的原创画面（非原作复刻，见 monet-meadow-SOURCES.md）；暗色底图 `monet-waterlilies.jpg` 是克利夫兰艺术博物馆 CC0 的《睡莲》1907 真实高清图（见 monet-waterlilies-SOURCES.md），暗色 token 由它实际取样推导。两套主题各挂自己的画：`--oil-painting`（亮）与 `--oil-painting-dark`（暗，由 layout.html 注入资源指纹）。
+画作只在主页通栏出现一次（`.is-home .page` 解除宽度限制）；其余页面是纸面 + 墨色。全站底纹是**纸纹级别**：浅色 4.5%、深色 2.8%（睡莲的强高光在深底上会显出"幽灵图"，因此暗色更低）。页面共用单张固定视口底图，不重复平铺，不随长页面拉伸。聊天页底纹再降至公共透明度的 65%。
+底图 URL 在 layout.html 使用二进制版本指纹提供给 `--oil-painting` / `--oil-painting-dark`；home.css 是背景透明度、主题遮罩与界面色彩的唯一 owner。自定义图片流程不变（上传图只替换主页画作，不替换底纹）。图片与生成提示词来源见各 SOURCES.md。
 
 ## 运行时映射
-`web/static/css/home.css` 顶部 `:root` 与 `html[data-theme="dark"]` 是颜色唯一运行时来源；本文镜像核心值，不生成第二套变量。primary 对应 pond，background 对应 wall，surface 对应 card，text 对应 ink，secondary 对应 ink-soft，sky 对应 skywater，gold 对应 ochre。深色使用蓝绿背景、柔和油画底纹与浅绿操作色；所有新增表面、阴影、滚动条颜色均通过这两个 token 块管理。
+`web/static/css/home.css` 顶部 `:root` 与 `html[data-theme="dark"]` 是颜色唯一运行时来源；本文镜像核心值，不生成第二套变量。**亮色**：primary/pond = 钴蓝 `#2a679c`，background/wall = 云白 `#e7e9e3`，surface/card = `#f2f3ee`，text/ink = 草影绿黑 `#1b2a22`，secondary/ink-soft = `#4d5f52`，sky/skywater = `#4d94cd`，gold/ochre = 橄榄金 `#adab71`（只做色块）。**暗色（睡莲）**：wall `#131b20`，card `#1e2b33`，ink `#e3e2ea`（淡紫白高光），ink-soft `#9bacb5`，primary/pond = 青蓝 `#7cc4da`。游戏专属色板（`--chess-*`/`--go-*`/`--gomoku-*`/`--mine-*`/`--t2048-*`/`--fps-*`）维持原值；`--fps-*` 是 sandstrike.js 的运行时接口，不可改名。所有表面、阴影、滚动条颜色均通过这两个 token 块管理。
 
 ## 排版与布局
-标题用系统宋体族，正文与控件用系统无衬线中文字体，无远程字体。1240px 页面容器，流式内边距；主页默认是油画背景，也支持上传图片，游戏列表双列，560px 以下单列。正文保持自然滚动；画作预留宽高，游戏舞台不得超出容器。圆角层级为按钮 8px、列表 14px、首屏 24px。阴影仅用于悬停、画框与浮层。
+标题的拉丁与数字用自托管 EB Garamond（可变字体 400–800，SIL OFL，见 vendor/fonts/SOURCES.md），中文回落到系统宋体族；正文与控件用系统无衬线中文。数字在作品目录与 HUD 里启用旧式数字（`font-variant-numeric: oldstyle-nums`）。字号尺度 `--step--1..4` = 12/14/16/20 与 clamp(34px,4.4vw,48px)，只约束页面级文字。1240px 页面容器，流式内边距；主页画作通栏，目录收回到 1240。正文行宽 ≤ 68 个汉字。**结构一律直角**；表单控件与滚动条 2px（`--radius-1`），真实圆形物体 999px（`--radius-round`）。阴影只有一档（`0 24px 60px var(--shadow)`），只给真正浮起的浮层。间距用 `--space-1..8`，组内紧、组间松。禁止拉字距的 CJK 小标签。
 
-## 游戏页标题与游戏列表
-游戏页不再隐藏一级标题：`game-ui.js` 把 `.game-title-row`（图标 + `h1.game-heading`）连同「全部游戏」返回入口一起移入公共页头，页面始终有可见且可访问的游戏名；560px 以下隐藏标题前的小图标并降到 15px。小游戏集合页按设备过滤，只列出适合当前平台的游戏，不提供跨平台入口，因此不写「全部游戏」之类的数量或范围承诺，也不显示数量（站点文案、meta description 与关于页一律不写具体个数）。旧版 `.device-filter / .filter / .auto-note` 筛选器样式已删除。
+## 游戏页标题与游戏目录
+游戏页不再隐藏一级标题：`game-ui.js` 把 `.game-title-row`（图标 + `h1.game-heading`）连同「全部游戏」返回入口一起移入公共页头，页面始终有可见且可访问的游戏名；560px 以下隐藏标题前的小图标并降到 15px。小游戏集合页按设备过滤，只列出适合当前平台的游戏，不写数量或范围承诺。**列表是作品目录不是卡片**：一行一件（`.placard` 名字保留），四列 = 26px 单色图标 / 宋体名称 / 小字给语 / 右对齐的平台与成绩，行间用细线分隔；悬停只做细线加深、名称横移 2px、图标显出该游戏的 Accent 色。「本地最佳」没有纪录就不渲染（`games.js` 控制 `[data-best]` 的 hidden）。
 
 ## 可读性底线
 扫雷数字（`--mine-n*`）与 2048 方块（`--t2048-*`）在两套主题下都必须对各自底色达到 4.5:1；2048 的 tile2/tile4 用 `--ink` 配字，其余方块底在两套主题下相同，字色固定为 `--t2048-on-8` / `--on-tile`，不做深色覆盖。深色模式下禁止用通配的 `.cell2048` / `.mine-cell` 规则覆盖带状态类的同一元素——那会静默吃掉方块色阶与插旗底色，需要限定 `:not(.tile)` 或补 `.flagged` 同特异度规则。设备不适配提示 `.notice` 文字用 `--ink`（底色为 `--hero-surface`）。

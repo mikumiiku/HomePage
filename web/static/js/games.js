@@ -2,14 +2,15 @@
 (function (M) {
   'use strict';
 
-  /* 1) 每张卡片上的「本地最佳」。选择器只锚定 data-game-id，与列表结构解耦 */
+  /* 1) 每行目录的「本地最佳」。有纪录才出现，没有就不占位——不再让破折号铺满列表 */
   document.querySelectorAll('[data-game-id]').forEach(function (card) {
     var id = card.dataset.gameId;
     var line = card.querySelector('[data-best]');
     if (!id || !line) return;
     var text = '';
     try { text = M.store.bestText(id, 'main') || ''; } catch (e) { /* 未登记的游戏不显示 */ }
-    line.textContent = text ? '本地最佳 ' + text : '本地最佳 —';
+    if (text) { line.textContent = '本地最佳 ' + text; line.hidden = false; }
+    else line.hidden = true;
   });
 
   /* 2) 最近在玩 */

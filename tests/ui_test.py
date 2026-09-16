@@ -6,7 +6,7 @@ import sys
 
 from playwright.sync_api import sync_playwright
 
-BASE = "http://127.0.0.1:8888"
+BASE = os.environ.get("HOME_BASE", "http://127.0.0.1:8888")
 OUT = os.path.join(os.path.dirname(__file__), "shots")
 os.makedirs(OUT, exist_ok=True)
 

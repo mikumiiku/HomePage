@@ -140,6 +140,13 @@
         stage.classList.toggle('game-side-controls', wide);
         // 对称预留操作栏空间，棋盘中心始终落在屏幕中轴。
         var width = Math.max(80, rect.width - (wide ? 208 : 0));
+        if (game === 'chess') {
+          /* 象棋的棋盘列是 minmax(0,1fr)，高度给的尺寸可能超过列宽（竖屏平板），
+             因此钳制到「布局宽 − 侧栏 304px − 列间距」，避免把页面撑出横向滚动。 */
+          var chessLayout = stage.querySelector('.chess-layout');
+          var chessCol = chessLayout ? chessLayout.clientWidth - 344 : 0;
+          if (chessCol > 80) width = Math.min(width, chessCol);
+        }
         var notice = stage.querySelector('.gm-notice, .go-notice, .chess-notice');
         var height = rect.height - (notice && !notice.hidden ? notice.offsetHeight + 8 : 0);
         if (!wide) height -= controls.offsetHeight + 8;

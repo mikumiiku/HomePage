@@ -177,7 +177,7 @@
       ],
       actions: [
         { label: '简单 4×4', primary: true, onClick: function () { setup('easy'); } },
-        { label: '困难 6×6', primary: true, onClick: function () { setup('hard'); } },
+        { label: '困难 6×6', onClick: function () { setup('hard'); } },
       ],
     });
   }

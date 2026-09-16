@@ -8,7 +8,7 @@
 .chess-layout { display:grid; grid-template-columns:minmax(0,1fr) 304px; gap:clamp(24px,4vw,52px); align-items:start; }
 .chess-play { min-width:0; width:100%; max-width:710px; margin:0 auto; }
 .chess-player { display:flex; align-items:center; gap:12px; min-height:66px; padding:8px 4px; }
-.chess-avatar { width:42px; height:42px; border:1px solid var(--rule); border-radius:12px; background:var(--card); display:grid; place-items:center; }
+.chess-avatar { width:42px; height:42px; border:1px solid var(--rule); border-radius:0; background:var(--card); display:grid; place-items:center; }
 .chess-avatar img { width:34px; height:34px; }
 .chess-player-name { display:flex; flex-direction:column; gap:4px; white-space:nowrap; }
 .chess-player-name b { font-size:15px; font-weight:600; }
@@ -17,8 +17,8 @@
 .chess-player.active .chess-player-turn { color:var(--pond); font-weight:600; }
 .chess-captured { display:flex; flex-wrap:wrap; flex:1; gap:0; max-width:220px; }
 .chess-captured img { width:19px; height:22px; margin-right:-4px; }
-.chess-frame { position:relative; padding:8px 8px 25px 25px; border:1px solid var(--rule); border-radius:12px; background:var(--card); box-shadow:0 14px 32px var(--shadow); }
-.chess-board { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); aspect-ratio:1; width:100%; border-radius:4px; overflow:hidden; touch-action:manipulation; }
+.chess-frame { position:relative; padding:8px 8px 25px 25px; border:1px solid var(--rule); border-radius:0; background:var(--card); box-shadow:none; }
+.chess-board { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); aspect-ratio:1; width:100%; border-radius:0; overflow:hidden; touch-action:manipulation; }
 .chess-cell { position:relative; display:grid; place-items:center; width:100%; min-width:0; padding:0; border:0; border-radius:0; aspect-ratio:1; cursor:pointer; -webkit-tap-highlight-color:transparent; }
 .chess-cell.light { background:var(--chess-light); }
 .chess-cell.dark { background:var(--chess-dark); }
@@ -36,7 +36,7 @@
 .chess-files { position:absolute; left:25px; right:8px; bottom:5px; display:grid; grid-template-columns:repeat(8,1fr); text-align:center; }
 .chess-files,.chess-ranks { font-size:11px; color:var(--ink-soft); }
 .chess-help { margin:6px 0 0; text-align:center; font-size:12px; color:var(--ink-soft); line-height:1.6; }
-.chess-sidebar { background:var(--card); border:1px solid var(--rule); border-radius:16px; padding:24px; min-width:0; }
+.chess-sidebar { padding:24px; min-width:0 }
 .chess-sidebar section+section,.chess-rules { border-top:1px solid var(--rule); padding-top:20px; margin-top:20px; }
 .chess-status-heading { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--ink-soft); }
 #chess-count { margin-left:auto; font-variant-numeric:tabular-nums; }
@@ -49,7 +49,7 @@
 .chess-sidebar h3 { margin:0 0 14px; font-size:14px; font-weight:600; }
 .chess-fields { display:grid; grid-template-columns:72px minmax(0,1fr); gap:10px; align-items:center; }
 .chess-fields label { font-size:12px; color:var(--ink-soft); }
-.chess-fields select { width:100%; min-height:44px; padding:8px; border:1px solid var(--rule); border-radius:8px; font:13px var(--font-body); color:var(--ink); background:var(--card); cursor:pointer; }
+.chess-fields select { width:100%; min-height:44px; padding:8px; border:1px solid var(--rule); border-radius:var(--radius-1); font:13px var(--font-body); color:var(--ink); background:var(--card); cursor:pointer; }
 .chess-fields select:hover { border-color:var(--pond); }
 .chess-stage :disabled { cursor:not-allowed; opacity:.45; }
 #chess-new { width:100%; min-height:44px; margin-top:14px; }
@@ -60,24 +60,23 @@
 .chess-history { max-height:180px; overflow:auto; scrollbar-gutter:stable; margin-top:10px; }
 .chess-history-row { display:grid; grid-template-columns:32px 1fr 1fr; align-items:center; gap:3px; min-height:36px; font-variant-numeric:tabular-nums; }
 .chess-history-row > span { color:var(--ink-soft); font-size:12px; }
-.chess-history-row button { border:0; border-radius:5px; padding:8px; color:var(--ink); background:transparent; text-align:left; cursor:pointer; font:14px var(--font-body); }
+.chess-history-row button { border:0; border-radius:0; padding:8px; color:var(--ink); background:transparent; text-align:left; cursor:pointer; font:14px var(--font-body); }
 .chess-history-row button:hover,.chess-history-row button.current { background:var(--wall); }
 .chess-history-row button:active { background:var(--rule); }
 .chess-rules summary { cursor:pointer; font-size:13px; }
 .chess-rules summary:hover { color:var(--pond); }
 .chess-rules p { font-size:12px; line-height:1.8; color:var(--ink-soft); }
-.chess-dialog { width:min(420px,calc(100vw - 32px)); max-height:90dvh; overflow:auto; padding:26px; border:1px solid var(--rule); border-radius:16px; color:var(--ink); background:var(--card); box-shadow:0 18px 60px var(--shadow); }
-.chess-dialog::backdrop { background:var(--scrim); }
+.chess-dialog { width:min(420px,calc(100vw - 32px)); max-height:90dvh; overflow:auto; padding:26px }
 .chess-dialog h2 { margin:0 0 12px; font:500 24px var(--font-display); }
 .chess-dialog p { font-size:14px; line-height:1.7; color:var(--ink-soft); }
 .chess-promotion-options { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:20px 0; }
 .chess-promotion-options .btn { padding:6px; display:flex; flex-direction:column; align-items:center; }
 .chess-promotion-options img { width:100%; max-width:58px; }
-.chess-notice { padding:14px; border:1px solid var(--btn-border); background:var(--card); border-radius:8px; margin-bottom:16px; font-size:14px; line-height:1.7; }
+.chess-notice { padding:14px; margin-bottom:16px; font-size:14px; line-height:1.7 }
 .chess-notice button { margin:8px 4px 0 0; }
 @media(min-width:1100px) { .chess-layout { grid-template-columns:minmax(360px,min(710px,calc(100dvh - 390px))) 304px; justify-content:center; } }
-@media(max-width:760px) { .chess-shell > .game-title-row { margin:14px 0; } .chess-shell .game-heading { font-size:25px; } .chess-layout { grid-template-columns:1fr; gap:22px; } .chess-play { max-width:570px; } .chess-sidebar { padding:20px; display:grid; grid-template-columns:1fr 1fr; gap:20px; } .chess-sidebar section+section { margin:0; padding:0; border:0; } .chess-history-section,.chess-rules { grid-column:1/-1; } .chess-rules { margin:0; } .chess-current h2 { font-size:22px; } }
-@media(max-width:480px) { .chess-sidebar { display:block; } .chess-sidebar section+section { border-top:1px solid var(--rule); padding-top:20px; margin-top:20px; } .chess-rules { margin-top:20px; } .chess-player { gap:8px; min-height:60px; } .chess-player-turn { font-size:11px; } .chess-avatar { width:36px; height:36px; } .chess-captured img { width:15px; height:18px; } .chess-frame { padding:6px 6px 22px 22px; } .chess-ranks { top:6px; bottom:22px; width:22px; } .chess-files { left:22px; right:6px; bottom:4px; } }
+@media(max-width:760px) { .chess-shell > .game-title-row { margin:14px 0; } .chess-shell .game-heading { font-size:25px; } .chess-layout { grid-template-columns:1fr; gap:22px; } .chess-play { max-width:570px; } .chess-sidebar { padding:20px; display:grid; grid-template-columns:1fr 1fr; gap:20px } .chess-sidebar section+section { margin:0; padding:0; border:0; } .chess-history-section,.chess-rules { grid-column:1/-1; } .chess-rules { margin:0; } .chess-current h2 { font-size:22px; } }
+@media(max-width:480px) { .chess-sidebar { display:block } .chess-sidebar section+section { border-top:1px solid var(--rule); padding-top:20px; margin-top:20px; } .chess-rules { margin-top:20px; } .chess-player { gap:8px; min-height:60px; } .chess-player-turn { font-size:11px; } .chess-avatar { width:36px; height:36px; } .chess-captured img { width:15px; height:18px; } .chess-frame { padding:6px 6px 22px 22px; } .chess-ranks { top:6px; bottom:22px; width:22px; } .chess-files { left:22px; right:6px; bottom:4px; } }
 @media(prefers-reduced-motion:reduce) { .chess-cell img { transition:none; } }
 .chess-rules a { color:var(--pond); text-underline-offset:3px; }
 .chess-rules a:hover { color:var(--primary-hover); }

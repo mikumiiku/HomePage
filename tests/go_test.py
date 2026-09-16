@@ -115,6 +115,7 @@ with sync_playwright() as playwright:
     page.keyboard.press("Escape")
     expect(page.locator("#go-open-settings")).to_be_focused()
     play_point(page, 40)
+    page.locator("#go-open-settings").click();expect(page.locator("#go-settings-dialog")).to_be_visible()
     page.locator("#go-new").click()
     expect(page.locator("#go-new-dialog")).to_be_visible()
     page.keyboard.press("Escape")

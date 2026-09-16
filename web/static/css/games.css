@@ -4,19 +4,17 @@
    ============================================================ */
 
 /* —— 2048 —— */
-.board2048 {
-  width: 100%; aspect-ratio: 1; display: grid;
+.board2048 { width: 100%; aspect-ratio: 1; display: grid;
   grid-template: repeat(4, 1fr) / repeat(4, 1fr); gap: 10px; padding: 10px;
-  background: rgba(127, 163, 184, 0.3); border-radius: 4px;
-  box-shadow: inset 0 0 0 1px rgba(47, 62, 61, 0.08);
-  touch-action: none; user-select: none;
-}
-.cell2048 {
-  border-radius: 3px; background: rgba(251, 251, 247, 0.55);
+  background: var(--surface-sunk); border-radius:0;
+  box-shadow: inset 0 0 0 1px var(--rule);
+  touch-action: none; user-select: none; }
+.cell2048 { border-radius:0; background: var(--card);
   display: grid; place-items: center;
   font-family: var(--font-display); font-weight: 700;
-  font-size: clamp(22px, 7vw, 40px);
-}
+  font-size: clamp(22px, 7vw, 40px); }
+/* 空格子给一道内描边：低值方块（2/4）本身就很浅，没有描边分不出哪些格被占 */
+.cell2048:not(.tile) { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rule) 55%, transparent); }
 .cell2048.tile { animation: popIn 0.16s ease; color: var(--on-tile); }
 .cell2048.tile-2 { background: var(--t2048-2); color: var(--ink); }
 .cell2048.tile-4 { background: var(--t2048-4); color: var(--ink); }
@@ -32,11 +30,9 @@
 .cell2048.tile-super { background: var(--t2048-super); box-shadow: 0 0 26px rgba(181, 73, 58, 0.95); }
 
 /* —— 贪吃蛇 —— */
-.canvas-frame {
-  padding: 10px; background: var(--card, #fbfbf7); border-radius: 4px;
-  box-shadow: inset 0 0 0 1px rgba(47, 62, 61, 0.08);
-}
-.canvas-frame canvas { display: block; width: 100%; height: auto; border-radius: 3px; touch-action: none; }
+.canvas-frame { padding: 10px; background: var(--card); border-radius:0;
+  box-shadow: inset 0 0 0 1px var(--rule); }
+.canvas-frame canvas { display: block; width: 100%; height: auto; border-radius:0; touch-action: none; }
 
 /* —— 记忆翻牌 —— */
 .mem-grid { display: grid; gap: 10px; width: 100%; }
@@ -44,38 +40,32 @@
   aspect-ratio: 1; perspective: 700px; cursor: pointer;
   display: block; width: 100%; padding: 0; border: 0; background: none; color: inherit;
 }
-.mem-inner {
-  position: relative; width: 100%; height: 100%;
+.mem-inner { position: relative; width: 100%; height: 100%;
   transform-style: preserve-3d; transition: transform 0.35s;
-  border-radius: 4px;
-}
+  border-radius:0; }
 .mem-card.open .mem-inner, .mem-card.done .mem-inner { transform: rotateY(180deg); }
-.mem-face {
-  position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
-  display: grid; place-items: center; border-radius: 4px; font-size: clamp(24px, 6vw, 40px);
-}
+.mem-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  display: grid; place-items: center; border-radius:0; font-size: clamp(24px, 6vw, 40px); }
 .mem-front {
-  background: radial-gradient(circle at 30% 25%, #cdd9c6, #86a678 160%);
-  box-shadow: inset 0 0 0 1px rgba(251, 251, 247, 0.4);
+  background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--willow) 60%, var(--card)), var(--willow) 160%);
+  box-shadow: inset 0 0 0 1px var(--rule);
 }
 .mem-front::after { content: "🍃"; opacity: 0.55; font-size: 0.8em; }
 .mem-back {
   background: var(--card, #fbfbf7); transform: rotateY(180deg);
-  box-shadow: inset 0 0 0 1px rgba(217, 138, 169, 0.45);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rose) 45%, transparent);
 }
 .mem-card.done .mem-back { background: rgba(217, 138, 169, 0.18); }
 
 /* —— 扫雷 —— */
 .mine-grid { display: grid; gap: 3px; width: 100%; touch-action: manipulation; }
-.mine-cell {
-  aspect-ratio: 1; border: 0; padding: 0; cursor: pointer;
-  border-radius: 3px; background: #d8d4e2;
-  box-shadow: inset 0 -2px 0 rgba(47, 62, 61, 0.14);
+.mine-cell { aspect-ratio: 1; border: 0; padding: 0; cursor: pointer;
+  border-radius:0; background: var(--surface-sunk-deep);
+  box-shadow: inset 0 -2px 0 var(--rule);
   font-family: var(--font-display); font-weight: 700;
   font-size: clamp(10px, 3.4vw, 18px); line-height: 1;
   display: grid; place-items: center; color: var(--ink, #2f3e3d);
-  user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
-}
+  user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
 .mine-cell.revealed { background: var(--card, #fbfbf7); box-shadow: none; cursor: default; }
 .mine-cell.boom { background: var(--rose, #d98aa9); color: #f5f3ea; }
 .mine-cell.flagged { background: rgba(201, 168, 106, 0.35); }
@@ -99,37 +89,30 @@
 .tetris-side canvas { display: block; width: 100%; }
 
 /* —— 指尖快划 —— */
-.swipe-tile {
-  width: 100%; aspect-ratio: 1; border-radius: 4px;
+.swipe-tile { width: 100%; aspect-ratio: 1; border-radius:0;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-  background: radial-gradient(circle at 30% 25%, rgba(251, 251, 247, 0.95), var(--tile-accent, #7fa3b8) 150%);
-  box-shadow: inset 0 0 0 1px rgba(47, 62, 61, 0.08);
+  background: radial-gradient(circle at 30% 25%, var(--card), var(--tile-accent, #7fa3b8) 150%);
+  box-shadow: inset 0 0 0 1px var(--rule);
   touch-action: none; user-select: none; -webkit-user-select: none;
-  transition: transform 0.12s;
-}
+  transition: transform 0.12s; }
 .swipe-tile.hit { transform: scale(0.96); }
 .swipe-arrow {
   font-family: var(--font-display); font-weight: 700;
   font-size: clamp(72px, 26vw, 130px); line-height: 1;
-  filter: drop-shadow(0 6px 12px rgba(47, 62, 61, 0.3));
+  filter: drop-shadow(0 6px 12px color-mix(in srgb, var(--ink) 28%, transparent));
   transition: opacity 0.12s, transform 0.12s;
 }
 .swipe-arrow.wrong { opacity: 0.35; transform: rotate(20deg) scale(0.8); }
-.swipe-bar-track { width: 58%; height: 10px; border-radius: 999px; background: rgba(251, 251, 247, 0.6); overflow: hidden; }
-.swipe-bar { height: 100%; width: 100%; border-radius: 999px; background: var(--rose, #d98aa9); transition: width 0.1s linear; }
+.swipe-bar-track { width: 58%; height: 10px; border-radius:0; background: color-mix(in srgb, var(--card) 65%, transparent); overflow: hidden; }
+.swipe-bar  { height: 100%; width: 100%; border-radius:0; background: var(--rose, #d98aa9); transition: width 0.1s linear; }
 .swipe-meta { display: flex; gap: 22px; color: var(--ink-soft, #64736f); font-size: 13.5px; margin-top: 14px; justify-content: center; }
 .swipe-meta b { color: var(--ink, #2f3e3d); font-variant-numeric: tabular-nums; }
 
 /* —— 暗色主题表面 —— */
-html[data-theme="dark"] .canvas-frame { background: var(--card, #2a3237); }
-html[data-theme="dark"] .board2048 { background: rgba(127, 163, 184, 0.16); }
-html[data-theme="dark"] .cell2048:not(.tile) { background: rgba(255, 255, 255, 0.08); }
 html[data-theme="dark"] .mem-back { background: var(--card, #2a3237); }
-html[data-theme="dark"] .mem-card.done .mem-back { background: rgba(217, 138, 169, 0.22); }
-html[data-theme="dark"] .mine-cell { background: #3a434a; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.3); }
-html[data-theme="dark"] .mine-cell.flagged { background: color-mix(in srgb, var(--ochre) 35%, #3a434a); }
+html[data-theme="dark"] .mem-card.done .mem-back { background: color-mix(in srgb, var(--rose) 22%, transparent); }
+html[data-theme="dark"] .mine-cell.flagged { background: color-mix(in srgb, var(--ochre) 35%, var(--surface-sunk-deep)); }
 html[data-theme="dark"] .mine-cell.revealed { background: var(--card, #2a3237); }
-html[data-theme="dark"] .swipe-bar-track { background: rgba(255, 255, 255, 0.22); }
 html[data-theme="dark"] .tetris-side .panel { border-bottom-color: var(--rule, #3a474c); }
 
 /* 窄屏仍可查看电脑游戏，画布等比缩放，侧栏移到下方。 */

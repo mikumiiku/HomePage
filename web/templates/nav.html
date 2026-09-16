@@ -1,6 +1,6 @@
 {{define "content"}}
 
-<section class="hero hero-home" id="hero">
+<section class="hero-home" id="hero">
   <button id="bg-upload" class="hero-btn" type="button" aria-label="更换背景图" title="更换背景图">
     <span class="ti" style="--icon:url(/static/vendor/bootstrap-icons/images.svg?v={{.Ver}})" aria-hidden="true"></span>
   </button>
@@ -14,9 +14,8 @@
     <li>
       <a class="placard" href="{{.Href}}">
         <span class="icon-chip" style="--accent:{{.Accent}};--icon:url(/static/img/{{.Icon}}.svg?v={{$.Ver}})" aria-hidden="true"></span>
-        <span class="placard-body">
-          <span class="placard-title">{{.Name}}</span>
-        </span>
+        <span class="placard-title">{{.Name}}</span>
+        <span class="placard-tagline">{{.Desc}}</span>
       </a>
     </li>
     {{end}}

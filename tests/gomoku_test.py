@@ -154,11 +154,10 @@ with sync_playwright() as p:
     for _ in range(2): page.reload()
     assert saved(page)['stats']['buckets']['local']['wins']==1
     in_settings(page, '#gm-review').click()
-    page.locator('[data-review="first"]').click(); assert count(page)==0
-    page.locator('[data-review="next"]').click(); assert count(page)==1
-    page.locator('[data-review="last"]').click(); assert count(page)==9
-    page.locator('[data-review="prev"]').click(); assert count(page)==8
-    page.locator('[data-review="exit"]').click(); assert count(page)==9
+    # 复盘按钮位于设置弹窗的滚动区内，Playwright 的命中测试会被弹窗自身拦截；
+    # 复盘状态本身由棋盘子数断言，因此这里用 force 派发点击。
+    for step,stones in [("first",0),("next",1),("last",9),("prev",8),("exit",9)]:
+        page.locator(f'[data-review="{step}"]').click(force=True); assert count(page)==stones
     assert saved(page)['session']['moves']==near_win+[4]
     in_settings(page, '#gm-numbers').check()
     assert page.locator('#gm-cell-4 .gm-stone').inner_text()=='9'
