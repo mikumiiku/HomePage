@@ -166,6 +166,8 @@
   }
   el('cancel').onclick=function(){el('confirm').close();};
   el('promotion-cancel').onclick=function(){el('promotion').close();};
+  /* 升变弹窗关闭后把焦点还给棋盘当前格，键盘用户不必重新 Tab 进来定位。 */
+  el('promotion').addEventListener('close',function(){var cell=el('board').querySelector('.chess-cell[tabindex="0"]')||el('board').firstElementChild;if(cell)cell.focus({preventScroll:true});});
   function start() {
     if(checkConflict()) return; stop(); data.settings=Object.assign({},data.settings,{mode:el('mode').value,level:el('level').value,color:el('color').value});
     data.session={settings:Object.assign({},data.settings),moves:[],result:null,settled:false};game=new Chess();review=null;selected=null;flipped=data.settings.mode==='ai'&&data.settings.color==='b';persist();render();think();

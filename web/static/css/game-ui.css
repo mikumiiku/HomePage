@@ -5,10 +5,24 @@ body.is-game { height: 100dvh; min-height: 0; overflow: hidden; }
 .is-game .page { width: 100%; max-width: none; flex: 1; min-height: 0; padding: 0 12px max(8px, env(safe-area-inset-bottom)); }
 .is-game .game-shell { display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; max-width: none; margin: 0; padding: 0; }
 .is-game .game-shell > .game-title-row { display: none; }
+/* 游戏名随后由 game-ui.js 移入公共页头：游戏页必须保留可见的一级标题。 */
+.is-game .site-header .game-title-row { display: flex; flex: 0 1 auto; min-width: 0; margin: 0; gap: 8px; justify-content: flex-start; }
+.is-game .site-header .game-title-row .icon-chip-sm { width: 22px; height: 22px; }
+.is-game .site-header .game-heading { font-size: 17px; letter-spacing: .04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 560px) {
+  .is-game .site-header .game-title-row .icon-chip-sm { display: none; }
+  .is-game .site-header .game-heading { font-size: 15px; letter-spacing: 0; }
+}
 .is-game .game-shell > .back-link, .is-game .gomoku-back-row, .is-game .go-back-row { height: 36px; flex: 0 0 36px; margin: 0; }
 .is-game .game-back { width: 36px; height: 36px; padding: 8px; display: grid; place-items: center; }
 .game-back .ti { transform: rotate(180deg); }
-.game-icon-button { display: inline-grid; place-items: center; width: 44px; min-width: 44px; height: 44px; padding: 10px; }
+.game-icon-button { display: inline-grid; place-items: center; width: 44px; min-width: 44px; height: 44px; padding: 10px; transition: background .18s, border-color .18s; }
+/* 开关类图标按钮的开启态；`.ti` 用 currentColor 取色，因此同时提亮图标。 */
+.game-icon-button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--ochre) 32%, transparent);
+  border-color: var(--ochre);
+  color: var(--ink);
+}
 .game-icon-button .ti { width: 20px; height: 20px; background: currentColor; mask: var(--icon) center / contain no-repeat; -webkit-mask: var(--icon) center / contain no-repeat; }
 .is-game .hud { flex: 0 0 auto; width: fit-content; max-width: 100%; margin: 0 auto 8px; gap: 8px; padding: 0; }
 .is-game [hidden] { display: none !important; }
@@ -43,6 +57,17 @@ body.is-game { height: 100dvh; min-height: 0; overflow: hidden; }
 .game-settings[open] { display: flex; flex-direction: column; }
 .game-settings::backdrop { background: var(--scrim); }
 .game-settings > header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--rule); flex-shrink: 0; }
+/* common.js 的 M.confirm：与各游戏确认弹窗同一套外观。 */
+.game-confirm {
+  width: min(420px, calc(100vw - 32px)); max-height: 90dvh; overflow: auto;
+  padding: 24px; border: 1px solid var(--rule); border-radius: 16px;
+  background: var(--card); color: var(--ink); box-shadow: 0 18px 60px var(--shadow);
+}
+.game-confirm:not([open]) { display: none; }
+.game-confirm::backdrop { background: var(--scrim); }
+.game-confirm h2 { margin: 0 0 10px; font-family: var(--font-display); font-weight: 400; font-size: 22px; }
+.game-confirm p { margin: 0 0 18px; font-size: 14px; line-height: 1.8; color: var(--ink-soft); }
+.game-confirm .choices { display: flex; gap: 10px; justify-content: flex-end; }
 .game-settings h2 { margin: 0; font-size: 20px; }
 .game-settings-content { padding: 16px; overflow: auto; min-height: 0; overscroll-behavior: contain; }
 .game-settings-content > * + * { margin-top: 16px; }

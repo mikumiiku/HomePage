@@ -193,7 +193,8 @@ function confirm(title,text,label,action){
 function closeConfirm(){const actionFocus=returnFocus;$('confirm').close();confirmAction=null;if(actionFocus?.isConnected)actionFocus.focus();}
 $('confirm-no').onclick=closeConfirm;
 $('confirm-yes').onclick=()=>{const action=confirmAction;closeConfirm();action?.();};
-$('confirm').addEventListener('cancel',()=>{confirmAction=null;});
+// Escape 关闭走 cancel 分支，同样要归还焦点，否则焦点掉回 body。
+$('confirm').addEventListener('cancel',()=>{closeConfirm();});
 let settingsOpener=null;
 function formProfile(){
   const existing=data.settings.profiles.find(p=>p.id===editing);

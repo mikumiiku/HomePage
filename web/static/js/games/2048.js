@@ -5,7 +5,7 @@
   var G = M.savegame('2048');
   var SIZE = 4;
 
-  var board, score, over, wonShown;
+  var board, score, over, wonShown, moveCount = 0;
   var boardEl = document.createElement('div');
   boardEl.className = 'board2048';
   stage.appendChild(boardEl);
@@ -82,6 +82,7 @@
     });
     if (!moved) return;
     score += gained;
+    moveCount += 1;
     addRandom();
     if (reached2048) wonShown = true;
     render();
@@ -109,7 +110,7 @@
   /* 每步存档：续玩棋局 + 实时刷新纪录 */
   function persist() {
     G.update(function (d) {
-      d.session = { board: board.slice(), score: score, won: wonShown };
+      d.session = { board: board.slice(), score: score, won: wonShown, moveCount: moveCount };
       if (score > (d.best.score || 0)) d.best.score = score;
       var maxTile = Math.max.apply(null, board.filter(Boolean));
       if (maxTile > (d.best.maxTile || 0)) d.best.maxTile = maxTile;
@@ -120,7 +121,7 @@
   function finishGame() {
     G.update(function (d) {
       d.stats.games += 1;
-      d.stats.totalMoves = (d.stats.totalMoves || 0);
+      d.stats.totalMoves = (d.stats.totalMoves || 0) + moveCount;
       d.session = null;
     });
   }
@@ -144,11 +145,25 @@
   }
 
   function newGame() {
+    M.clearOverlays(stage);
     board = new Array(SIZE * SIZE).fill(0);
-    score = 0; over = false; wonShown = false;
+    score = 0; over = false; wonShown = false; moveCount = 0;
     addRandom(); addRandom();
     render();
     persist();
+  }
+
+  /* 已经有进度时先确认，避免一个按键或一次误点丢掉整局。 */
+  function restart() {
+    var played = score > 0 || board.filter(Boolean).length > 2;
+    if (!played || over) { newGame(); M.toast('已重新开始'); return; }
+    M.confirm({
+      title: '重新开始',
+      copy: '当前这局的进度会被清空，最高纪录不受影响。',
+      confirmLabel: '重新开始',
+      cancelLabel: '继续本局',
+      onConfirm: function () { newGame(); M.toast('已重新开始'); },
+    });
   }
 
   function resumeOrNew() {
@@ -160,6 +175,7 @@
       score = s.score || 0;
       over = false;
       wonShown = !!s.won;
+      moveCount = s.moveCount || 0; // 旧存档没有该字段，按 0 计
       render();
       M.toast('已恢复上次的进度');
       if (isDead()) {
@@ -174,9 +190,10 @@
 
   M.onDirectionKeys(move);
   M.onSwipe(boardEl, move);
-  M.onRestart(function () { newGame(); M.toast('已重新开始'); });
+  M.onRestart(restart);
   window.addEventListener('keydown', function (e) {
-    if (e.key === 'r' || e.key === 'R') { newGame(); M.toast('已重新开始'); }
+    if (M.gamePaused()) return;
+    if (e.key === 'r' || e.key === 'R') restart();
   });
 
   resumeOrNew();

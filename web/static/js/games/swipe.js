@@ -29,9 +29,9 @@
   var meta = document.createElement('div');
   meta.className = 'swipe-meta';
   meta.innerHTML =
-    '<span>连击 <b id="sw-combo">0</b></span>' +
-    '<span aria-label="生命"><b id="sw-lives">❤❤❤</b></span>' +
-    '<span aria-label="剩余时间"><b id="sw-time">30s</b></span>';
+    '<span role="img" id="sw-combo-wrap" aria-label="连击 0"><b id="sw-combo" aria-hidden="true">0</b></span>' +
+    '<span role="img" id="sw-lives-wrap" aria-label="剩余生命 3 条"><b id="sw-lives" aria-hidden="true">❤❤❤</b></span>' +
+    '<span role="img" id="sw-time-wrap" aria-label="剩余 30 秒"><b id="sw-time" aria-hidden="true">30s</b></span>';
   stage.appendChild(meta);
 
   var score = 0, combo = 0, lives = 3, timeLeft = ROUND;
@@ -42,7 +42,11 @@
     M.hud.score(score);
     document.getElementById('sw-combo').textContent = combo;
     document.getElementById('sw-lives').textContent = lives > 0 ? '❤'.repeat(lives) : '—';
-    document.getElementById('sw-time').textContent = timeLeft + 's';
+    document.getElementById('sw-time').textContent = Math.ceil(Math.max(0, timeLeft)) + 's';
+    // 内层字符只作视觉，读屏读数取这三条 aria-label。
+    document.getElementById('sw-combo-wrap').setAttribute('aria-label', '连击 ' + combo);
+    document.getElementById('sw-lives-wrap').setAttribute('aria-label', lives > 0 ? '剩余生命 ' + lives + ' 条' : '没有生命');
+    document.getElementById('sw-time-wrap').setAttribute('aria-label', '剩余 ' + Math.ceil(Math.max(0, timeLeft)) + ' 秒');
   }
 
   function nextArrow() {
@@ -84,6 +88,7 @@
       setTimeout(function () { arrow.classList.remove('wrong'); }, 160);
     }
     setHud();
+    M.announce(lives > 0 ? '失误，剩余生命 ' + lives + ' 条' : '失误，生命用完', true);
     if (lives <= 0) {
       end('三次失误');
       return;
@@ -108,7 +113,12 @@
       loseLife(false);
       return;
     }
-    document.getElementById('sw-time').textContent = Math.ceil(timeLeft) + 's';
+    var left = Math.ceil(timeLeft) + 's';
+    var timeText = document.getElementById('sw-time');
+    if (timeText.textContent !== left) {
+      timeText.textContent = left;
+      document.getElementById('sw-time-wrap').setAttribute('aria-label', '剩余 ' + Math.ceil(timeLeft) + ' 秒');
+    }
   }
 
   function start() {

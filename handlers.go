@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"html/template"
@@ -24,11 +25,12 @@ type ViewData struct {
 }
 
 var (
-	navTmpl   *template.Template
-	gamesTmpl *template.Template
-	gameTmpl  *template.Template
-	aboutTmpl *template.Template
-	chatTmpl  *template.Template
+	navTmpl      *template.Template
+	gamesTmpl    *template.Template
+	gameTmpl     *template.Template
+	aboutTmpl    *template.Template
+	chatTmpl     *template.Template
+	notFoundTmpl *template.Template
 )
 
 func initTemplates(fsys embed.FS) {
@@ -41,6 +43,8 @@ func initTemplates(fsys embed.FS) {
 		"web/templates/layout.html", "web/templates/game.html"))
 	aboutTmpl = template.Must(template.ParseFS(fsys,
 		"web/templates/layout.html", "web/templates/about.html"))
+	notFoundTmpl = template.Must(template.ParseFS(fsys,
+		"web/templates/layout.html", "web/templates/notfound.html"))
 }
 
 func mustSub(fsys embed.FS, dir string) fs.FS {
@@ -141,12 +145,19 @@ func render(w http.ResponseWriter, t *template.Template, data ViewData) {
 	}
 }
 
+// renderNotFound 走与其他页面同一套 layout：跟随亮暗模式、保留页头与主题按钮。
+// 先渲染到缓冲区，确认成功后再写 404 状态，避免模板出错时状态码与实际内容不一致。
 func renderNotFound(w http.ResponseWriter) {
+	var buf bytes.Buffer
+	data := ViewData{Title: "页面不存在", Ver: assetVersion}
+	if err := notFoundTmpl.ExecuteTemplate(&buf, "layout", data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(http.StatusNotFound)
-	w.Write([]byte("<!doctype html><meta charset=utf-8><title>404</title>" +
-		"<body style=\"font-family:sans-serif;text-align:center;padding-top:15vh;color:#3d4d63\">" +
-		"<h1>🧭</h1><p>这个页面不存在。</p><p><a href=\"/\">返回主页</a></p>"))
+	w.Write(buf.Bytes())
 }
 
 func chatHandler(w http.ResponseWriter, r *http.Request) {

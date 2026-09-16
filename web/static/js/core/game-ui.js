@@ -7,6 +7,9 @@
   var ver = new URL(document.currentScript.src).search;
   document.body.classList.add('is-game');
   stage.classList.add('unified-stage');
+  // 五子棋/围棋自己的 fitBoard 会在 ResizeObserver 首次回调时加 *-side-info；那次回调可能早于
+  // 本脚本，留下与统一布局冲突的 280px 侧栏列（棋盘左偏）。统一布局下必须清掉。
+  stage.classList.remove('gm-side-info', 'go-side-info');
   function icon(button, name, label) {
     if (!button) return;
     label = label || button.textContent.trim();
@@ -80,7 +83,11 @@
   }
   icon(shell.querySelector('.back-link'), 'arrow-right', '全部游戏');
   var back = shell.querySelector('.back-link'); back.classList.add('game-back');
-  document.querySelector('.site-header').insertBefore(back, document.querySelector('.header-actions'));
+  var header = document.querySelector('.site-header'), actions = document.querySelector('.header-actions');
+  header.insertBefore(back, actions);
+  // 游戏名随后进页头，游戏页始终有可见的一级标题，不再隐藏 h1。
+  var titleRow = shell.querySelector('.game-title-row');
+  if (titleRow) header.insertBefore(titleRow, actions);
   shell.querySelectorAll('.gomoku-back-row, .go-back-row').forEach(function (row) { row.remove(); });
 
   if (game === 'sandstrike') {
@@ -105,8 +112,10 @@
     new MutationObserver(syncPause).observe(stage, { childList: true }); syncPause();
     pause.addEventListener('click', function () {
       window.App.manualPause = !window.App.manualPause;
-      pause.setAttribute('aria-pressed', String(window.App.manualPause));
-      icon(pause, window.App.manualPause ? 'play' : 'pause', window.App.manualPause ? '继续游戏' : '暂停游戏');
+      var paused = window.App.manualPause;
+      pause.setAttribute('aria-pressed', String(paused));
+      icon(pause, paused ? 'play' : 'pause', paused ? '继续游戏' : '暂停游戏');
+      window.App.announce(paused ? '已暂停' : '继续游戏', true);
     });
   }
   if (content && stage.dataset.instructions) {

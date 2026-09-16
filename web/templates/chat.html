@@ -1,8 +1,9 @@
 {{define "extra_head"}}<link rel="stylesheet" href="/static/css/chat.css?v={{.Ver}}"><meta name="referrer" content="no-referrer">{{end}}
 {{define "content"}}
 <section class="chat-app" aria-label="AI 对话">
+  <h1 class="chat-sr">AI 对话</h1>
   <aside class="chat-sidebar" id="chat-sidebar">
-    <div class="chat-sidebar-head"><h1>AI 对话</h1><button class="chat-icon chat-mobile" id="chat-close-history" type="button" aria-label="关闭历史对话"><i class="ti" style="--icon:url(/static/vendor/bootstrap-icons/x-lg.svg)" aria-hidden="true"></i></button></div>
+    <div class="chat-sidebar-head"><h2>AI 对话</h2><button class="chat-icon chat-mobile" id="chat-close-history" type="button" aria-label="关闭历史对话"><i class="ti" style="--icon:url(/static/vendor/bootstrap-icons/x-lg.svg)" aria-hidden="true"></i></button></div>
     <button class="btn primary chat-new" id="chat-new" type="button"><i class="ti" style="--icon:url(/static/vendor/bootstrap-icons/plus.svg)" aria-hidden="true"></i>新建对话</button>
     <p class="chat-list-label">最近对话</p>
     <nav id="chat-history" class="chat-history" aria-label="历史对话"></nav>

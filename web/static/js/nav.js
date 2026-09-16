@@ -1,4 +1,4 @@
-/* 主页导航页：背景图（羊皮纸色 → 用户上传替换）+ 裁剪流程 */
+/* 主页导航页：背景图（默认油画 → 用户上传替换）+ 裁剪流程 */
 (function (M) {
   'use strict';
   var hero = document.getElementById('hero');
@@ -50,6 +50,10 @@
     modal.showModal();
     modal.addEventListener('cancel', function (e) { e.preventDefault(); closeModal(); });
 
+    // 图片解码完成前裁剪器还不存在，此时「保存应用」要明确不可用，而不是点了没反应。
+    var saveBtn = modal.querySelector('[data-act="save"]');
+    if (saveBtn) saveBtn.disabled = true;
+
     var img = modal.querySelector('img');
     img.onload = function () {
       cropper = new window.Cropper(img, {
@@ -60,6 +64,7 @@
         zoomable: true,
         aspectRatio: hero.clientWidth / Math.max(1, hero.clientHeight),
       });
+      if (saveBtn) saveBtn.disabled = false;
     };
     img.onerror = function () { M.toast('无法读取图片，请选择其他图片'); closeModal(); };
     img.src = dataURL;
@@ -76,7 +81,7 @@
         M.toast('已恢复默认背景');
         closeModal();
       } else if (act === 'save') {
-        if (!cropper) return;
+        if (!cropper) { M.toast('图片还在加载，请稍候'); return; }
         var canvas = cropper.getCroppedCanvas({
           maxWidth: 1600,
           maxHeight: 900,

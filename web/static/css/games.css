@@ -17,19 +17,19 @@
   font-family: var(--font-display); font-weight: 700;
   font-size: clamp(22px, 7vw, 40px);
 }
-.cell2048.tile { animation: popIn 0.16s ease; color: #f5f3ea; }
-.cell2048.tile-2 { background: #e8ece4; color: var(--ink, #2f3e3d); }
-.cell2048.tile-4 { background: #d3dfd6; color: var(--ink, #2f3e3d); }
-.cell2048.tile-8 { background: #9dbfcb; color: #22433e; }
-.cell2048.tile-16 { background: #7fa3b8; }
-.cell2048.tile-32 { background: #8a76b8; }
-.cell2048.tile-64 { background: #6f5a9e; }
-.cell2048.tile-128 { background: #86a678; box-shadow: 0 0 16px rgba(134, 166, 120, 0.65); }
-.cell2048.tile-256 { background: #4f7a68; box-shadow: 0 0 16px rgba(79, 122, 104, 0.65); }
-.cell2048.tile-512 { background: #c9a86a; box-shadow: 0 0 16px rgba(201, 168, 106, 0.75); }
-.cell2048.tile-1024 { background: #a67f35; box-shadow: 0 0 18px rgba(166, 127, 53, 0.8); }
-.cell2048.tile-2048 { background: #d98aa9; box-shadow: 0 0 24px rgba(217, 138, 169, 0.9); }
-.cell2048.tile-super { background: #b5493a; box-shadow: 0 0 26px rgba(181, 73, 58, 0.95); }
+.cell2048.tile { animation: popIn 0.16s ease; color: var(--on-tile); }
+.cell2048.tile-2 { background: var(--t2048-2); color: var(--ink); }
+.cell2048.tile-4 { background: var(--t2048-4); color: var(--ink); }
+.cell2048.tile-8 { background: var(--t2048-8); color: var(--t2048-on-8); }
+.cell2048.tile-16 { background: var(--t2048-16); }
+.cell2048.tile-32 { background: var(--t2048-32); }
+.cell2048.tile-64 { background: var(--t2048-64); }
+.cell2048.tile-128 { background: var(--t2048-128); box-shadow: 0 0 16px rgba(134, 166, 120, 0.65); }
+.cell2048.tile-256 { background: var(--t2048-256); box-shadow: 0 0 16px rgba(79, 122, 104, 0.65); }
+.cell2048.tile-512 { background: var(--t2048-512); box-shadow: 0 0 16px rgba(201, 168, 106, 0.75); }
+.cell2048.tile-1024 { background: var(--t2048-1024); box-shadow: 0 0 18px rgba(166, 127, 53, 0.8); }
+.cell2048.tile-2048 { background: var(--t2048-2048); box-shadow: 0 0 24px rgba(217, 138, 169, 0.9); }
+.cell2048.tile-super { background: var(--t2048-super); box-shadow: 0 0 26px rgba(181, 73, 58, 0.95); }
 
 /* —— 贪吃蛇 —— */
 .canvas-frame {
@@ -40,7 +40,10 @@
 
 /* —— 记忆翻牌 —— */
 .mem-grid { display: grid; gap: 10px; width: 100%; }
-.mem-card { aspect-ratio: 1; perspective: 700px; cursor: pointer; }
+.mem-card {
+  aspect-ratio: 1; perspective: 700px; cursor: pointer;
+  display: block; width: 100%; padding: 0; border: 0; background: none; color: inherit;
+}
 .mem-inner {
   position: relative; width: 100%; height: 100%;
   transform-style: preserve-3d; transition: transform 0.35s;
@@ -76,10 +79,10 @@
 .mine-cell.revealed { background: var(--card, #fbfbf7); box-shadow: none; cursor: default; }
 .mine-cell.boom { background: var(--rose, #d98aa9); color: #f5f3ea; }
 .mine-cell.flagged { background: rgba(201, 168, 106, 0.35); }
-.mine-cell.n1 { color: #5d8a86; } .mine-cell.n2 { color: #4f7a68; }
-.mine-cell.n3 { color: #b5493a; } .mine-cell.n4 { color: #8a76b8; }
-.mine-cell.n5 { color: #a67f35; } .mine-cell.n6 { color: #3f7370; }
-.mine-cell.n7 { color: #2f3e3d; } .mine-cell.n8 { color: #8a3a52; }
+.mine-cell.n1 { color: var(--mine-n1); } .mine-cell.n2 { color: var(--mine-n2); }
+.mine-cell.n3 { color: var(--mine-n3); } .mine-cell.n4 { color: var(--mine-n4); }
+.mine-cell.n5 { color: var(--mine-n5); } .mine-cell.n6 { color: var(--mine-n6); }
+.mine-cell.n7 { color: var(--mine-n7); } .mine-cell.n8 { color: var(--mine-n8); }
 .mine-toolbar { display: flex; gap: 8px; align-items: center; }
 
 /* —— 俄罗斯方块 —— */
@@ -95,7 +98,7 @@
 .tetris-side .panel.next { padding: 8px; border-bottom: 0; }
 .tetris-side canvas { display: block; width: 100%; }
 
-/* —— 指尖旋律 —— */
+/* —— 指尖快划 —— */
 .swipe-tile {
   width: 100%; aspect-ratio: 1; border-radius: 4px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
@@ -120,12 +123,11 @@
 /* —— 暗色主题表面 —— */
 html[data-theme="dark"] .canvas-frame { background: var(--card, #2a3237); }
 html[data-theme="dark"] .board2048 { background: rgba(127, 163, 184, 0.16); }
-html[data-theme="dark"] .cell2048 { background: rgba(255, 255, 255, 0.08); }
-html[data-theme="dark"] .cell2048.tile-2 { background: #39434a; color: #e0e7e2; }
-html[data-theme="dark"] .cell2048.tile-4 { background: #41504c; color: #e0e7e2; }
+html[data-theme="dark"] .cell2048:not(.tile) { background: rgba(255, 255, 255, 0.08); }
 html[data-theme="dark"] .mem-back { background: var(--card, #2a3237); }
 html[data-theme="dark"] .mem-card.done .mem-back { background: rgba(217, 138, 169, 0.22); }
 html[data-theme="dark"] .mine-cell { background: #3a434a; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.3); }
+html[data-theme="dark"] .mine-cell.flagged { background: color-mix(in srgb, var(--ochre) 35%, #3a434a); }
 html[data-theme="dark"] .mine-cell.revealed { background: var(--card, #2a3237); }
 html[data-theme="dark"] .swipe-bar-track { background: rgba(255, 255, 255, 0.22); }
 html[data-theme="dark"] .tetris-side .panel { border-bottom-color: var(--rule, #3a474c); }

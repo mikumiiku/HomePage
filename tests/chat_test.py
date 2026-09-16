@@ -78,7 +78,7 @@ with sync_playwright() as p:
  page.get_by_role('button',name='设置',exact=True).click();page.get_by_label('Base URL',exact=True).fill('http://localhost:8091/unsaved')
  page.get_by_role('button',name='关闭设置',exact=True).click();assert page.locator('#chat-confirm').evaluate('(e)=>e.open')
  page.get_by_role('button',name='放弃修改',exact=True).click()
- page.get_by_role('button',name='切换亮暗模式',exact=True).click();page.screenshot(path='/tmp/chat-dark.png',full_page=True)
+ page.locator('#theme-toggle').click();page.screenshot(path='/tmp/chat-dark.png',full_page=True)
  page.set_viewport_size({'width':390,'height':844});page.screenshot(path='/tmp/chat-mobile.png',full_page=True)
  assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
  page.get_by_role('button',name='打开历史对话',exact=True).click();assert page.locator('#chat-history').is_visible()

@@ -274,26 +274,26 @@
         title: '已暂停',
         lines: ['按 P 或点击按钮继续'],
         actions: [{ label: '继续', primary: true, onClick: togglePause }],
+        // Esc 本来就是暂停键，暂停中再按 Esc 应当继续。
+        onEscape: togglePause,
       });
     } else {
-      stage.querySelectorAll('.overlay').forEach(function (node) { node.remove(); });
+      M.clearOverlays(stage);
       schedule();
     }
   }
 
   window.addEventListener('keydown', function (e) {
-    if (M.gamePaused()) return;
-    if (!running || paused) {
-      if (e.key === 'p' || e.key === 'P') togglePause();
-      return;
-    }
+    // 暂停时 gamePaused() 为真（暂停覆盖层存在），因此 P 必须先于该判断处理。
+    if (document.querySelector('dialog[open]')) return;
+    if (e.key === 'p' || e.key === 'P') { togglePause(); return; }
+    if (M.gamePaused() || !running || paused) return;
     switch (e.key) {
       case 'ArrowLeft': e.preventDefault(); move(-1); break;
       case 'ArrowRight': e.preventDefault(); move(1); break;
       case 'ArrowUp': e.preventDefault(); tryRotate(); break;
       case 'ArrowDown': e.preventDefault(); clearTimeout(timer); softDrop(); break;
       case ' ': e.preventDefault(); clearTimeout(timer); hardDrop(); break;
-      case 'p': case 'P': togglePause(); break;
     }
   });
 

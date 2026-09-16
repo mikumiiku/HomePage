@@ -1,0 +1,10 @@
+# 莫奈配色油画背景
+
+- 文件：`monet-meadow.png`，1672 × 941，保留生成原图，不人工放大。
+- 来源：2026-09-16 使用内置 image_gen 生成；以项目现有 `monet-parasol.png`（莫奈《撑伞的女人》）作为风格与配色参考，生成原创草地与天空，不复刻原画构图。
+- 用途：主页背景，以及全站低透明度油画底纹。主题遮罩与透明度由 home.css tokens 管理。
+- 请求使用最高可用分辨率，实际输出为 1672 × 941，不称作 4K；手机与平板检查是浏览器模拟，不代替真机验收。
+
+## 生成提示词
+
+Use case: stylized-concept. Generate one ORIGINAL panoramic impressionist oil painting for a website background, with Claude Monet's light touch and the exact luminous COLOR RELATIONSHIPS of the attached reference Woman with a Parasol (1875). The attached image is a STYLE AND PALETTE REFERENCE, not an image to upscale or reproduce. This is a new landscape without people or umbrellas. Format wide 16:9, highest available native resolution. Priority: the unmistakable bright cornflower/cobalt/azure blue sky, creamy sunlit white clouds with pale blue and lavender shadows, vivid sunlit YELLOW-GREEN grassy slope, tiny restrained golden yellow wildflowers, and rich DEEP PARASOL GREEN shadows. Do NOT mute everything to gray or teal; keep Monet's fresh clear daylight and luminous chromatic contrasts. Compose about 70% open blue sky with broad drifting white clouds, 30% sloping meadow, a gentle diagonal grassy rise from lower left toward lower right. Some deep green shadow in the lower left gives room for a white homepage title, but no large flat dark region. Hand-painted 19th-century Impressionism: confident loose tapered broken-color brushstrokes, airy irregular gestures, colors optically interwoven at MEDIUM scale, thin and lightly loaded paint rather than sculptural thick impasto. Cloud strokes must be coherent soft organic painted shapes, not rectangular tiles. The paint surface feels finely resolved and tactile, while the overall composition remains readable and tranquil at phone size. Preserve clear color areas and larger rhythms. No artificial random noise, no dot texture, no pixel mosaics, no grain filter, no gritty canvas weave, no scratches, no muddy palette, no heavy palette-knife ridges, no flat vector gradients, no photorealism, no text, no signature, no frame. Full bleed painting.

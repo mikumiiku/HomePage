@@ -11,6 +11,7 @@
 
   var gridEl = document.createElement('div');
   gridEl.className = 'mine-grid';
+  gridEl.setAttribute('role', 'group');
   stage.appendChild(gridEl);
 
   /* 旗子模式开关（手机上单手更顺手） */
@@ -22,15 +23,14 @@
   flagBtn.innerHTML = '<span class="ti" aria-hidden="true" style="--icon:url(/static/vendor/bootstrap-icons/flag.svg)"></span>';
   flagBtn.addEventListener('click', function () {
     flagMode = !flagMode;
+    // 开启态由 .game-icon-button[aria-pressed="true"] 的 CSS 呈现，不再写不存在的 --sand / --amber。
     flagBtn.setAttribute('aria-pressed', String(flagMode));
-    flagBtn.style.background = flagMode ? 'var(--sand)' : '';
-    flagBtn.style.borderColor = flagMode ? 'var(--amber)' : '';
     M.toast(flagMode ? '旗子模式：轻触插旗' : '旗子模式已关闭');
   });
   M.hud.extra(flagBtn);
 
   var cells = [], minesMap = null, cols = 9, rows = 9, mines = 10, diff = 'easy';
-  var started = false, over = false, flagMode = false, flags = 0, revealed = 0;
+  var started = false, over = false, flagMode = false, flags = 0, revealed = 0, cursor = 0;
   var seconds = 0, timer = null;
 
   function idx(x, y) { return y * cols + x; }
@@ -79,19 +79,49 @@
     setMineHud();
 
     gridEl.style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
+    gridEl.setAttribute('aria-label', d.label + ' 扫雷棋盘');
     gridEl.innerHTML = '';
     for (var y = 0; y < rows; y++) {
       for (var x = 0; x < cols; x++) {
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'mine-cell';
-        btn.setAttribute('aria-label', (x + 1) + ',' + (y + 1));
         bindCell(btn, x, y);
         gridEl.appendChild(btn);
-        cells.push({ el: btn, mine: false, adj: 0, state: 'hidden' }); // 下标 = idx(x,y)
+        cells.push({ el: btn, x: x, y: y, mine: false, adj: 0, state: 'hidden' }); // 下标 = idx(x,y)
       }
     }
+    cursor = 0;
+    cells.forEach(function (c, i) { c.el.tabIndex = i === 0 ? 0 : -1; });
+    cells.forEach(paint);
   }
+
+  /* 单个 Tab 入口 + 方向键移动：困难棋盘有 256 格，逐个 Tab 走一遍不可用。 */
+  function setCursor(i) {
+    cursor = Math.max(0, Math.min(cells.length - 1, i));
+    cells.forEach(function (c, n) { c.el.tabIndex = n === cursor ? 0 : -1; });
+    cells[cursor].el.focus({ preventScroll: true });
+  }
+
+  gridEl.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.isComposing) return;
+    var x = cursor % cols, y = Math.floor(cursor / cols), next = cursor;
+    if (e.key === 'ArrowLeft') next = y * cols + Math.max(0, x - 1);
+    else if (e.key === 'ArrowRight') next = y * cols + Math.min(cols - 1, x + 1);
+    else if (e.key === 'ArrowUp') next = Math.max(0, y - 1) * cols + x;
+    else if (e.key === 'ArrowDown') next = Math.min(rows - 1, y + 1) * cols + x;
+    else if (e.key === 'Home') next = y * cols;
+    else if (e.key === 'End') next = y * cols + cols - 1;
+    else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleFlag(x, y); return; }
+    else return;
+    e.preventDefault(); setCursor(next);
+  });
+
+  gridEl.addEventListener('focusin', function (e) {
+    for (var i = 0; i < cells.length; i++) {
+      if (cells[i].el === e.target) { if (i !== cursor) setCursor(i); return; }
+    }
+  });
 
   /* 首次翻开时布雷，保证第一格及其邻域安全 */
   function placeMines(safeX, safeY) {
@@ -132,22 +162,28 @@
     }
   }
 
+  /* 格子是按钮，aria-label 会覆盖可见文字，因此位置与状态必须一起写进标签。 */
   function paint(c) {
     var el = c.el;
+    var label = '第 ' + (c.y + 1) + ' 行第 ' + (c.x + 1) + ' 列';
     el.classList.remove('flagged');
     if (c.state === 'revealed') {
       el.classList.add('revealed');
-      if (c.mine) { el.classList.add('boom'); el.textContent = '💥'; }
+      if (c.mine) { el.classList.add('boom'); el.textContent = '💥'; label += '，地雷'; }
       else if (c.adj > 0) {
         el.textContent = c.adj;
         el.classList.add('n' + Math.min(c.adj, 8));
-      } else el.textContent = '';
+        label += '，周围 ' + c.adj + ' 颗雷';
+      } else { el.textContent = ''; label += '，周围没有雷'; }
     } else if (c.state === 'flagged') {
       el.classList.add('flagged');
       el.textContent = '🚩';
+      label += '，已插旗';
     } else {
       el.textContent = '';
+      label += '，未翻开';
     }
+    el.setAttribute('aria-label', label);
   }
 
   function toggleFlag(x, y) {
@@ -286,10 +322,13 @@
   function showStart() {
     var st = G.load().data;
     M.hud.reset();
+    M.hud.label('score', '剩余雷数');
+    M.hud.score('—'); // 还没选难度，此时没有确定的雷数
     M.hud.extra(flagBtn);
     M.hud.extra(timeWrap);
     M.overlay(stage, {
       intro: true,
+      label: '选择难度',
       title: '扫雷',
       lines: [
         st.best.easy.seconds ? ('简单最快 ' + M.fmt.seconds(st.best.easy.seconds)) : '简单 9×9，10 颗雷',

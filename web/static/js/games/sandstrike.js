@@ -488,9 +488,16 @@
       equip(primary, true);
       fog.reset();fog.update(0,player,yaw,false,true);setState('playing'); spawnWave(); if(matchMedia('(pointer: coarse)').matches) viewport.scrollIntoView({block:'start'}); canvas.focus({ preventScroll: true }); lockPointer(); audioShot(200, 0.08, 0.01);
     }
-    function showOverlay(title, lines, label, action) {
+    function showOverlay(title, lines, label, action, escapeAction) {
       removeOverlays();
-      const overlay = M.overlay(viewport, { title, lines, actions: [{ label, primary: true, onClick: () => { $('toolbar').appendChild(loadout); action(); } }] });
+      // 动作与 Esc 都要先把主武器选择栏放回工具栏，再执行各自的回调。
+      const run = fn => () => { $('toolbar').appendChild(loadout); fn(); };
+      const overlay = M.overlay(viewport, {
+        title,
+        lines,
+        actions: [{ label, primary: true, onClick: run(action) }],
+        onEscape: escapeAction ? run(escapeAction) : null,
+      });
       viewport.style.minHeight = '';
       overlay.querySelector('.overlay-card').insertBefore(loadout, overlay.querySelector('.choices'));
       if(state === 'paused') { const restart=document.createElement('button');restart.type='button';restart.className='btn';restart.textContent='重新开始';restart.addEventListener('click',start);overlay.querySelector('.choices').appendChild(restart); }
@@ -499,12 +506,13 @@
         help.innerHTML='<summary>操作与战术</summary><p>WASD 移动 · 左键 / 空格射击 · 右键切换瞄准<br>C 蹲伏 · R 换弹 · G 投雷 · Shift 奔跑<br>1—4 切枪 · Q 上一武器 · Tab 战术地图 · Esc 暂停<br>未锁定鼠标时：拖动画面转向，单击射击。<br>常规视野 26 米，狙击开镜 48 米；未探索区域被迷雾遮蔽。<br>地面视野：浅色巡逻，琥珀色警戒，红色瞄准。敌人会通过无线电共享最后目击位置。</p>';
         overlay.querySelector('.overlay-card').appendChild(help);
       }
-      overlay.querySelector('button').focus({ preventScroll: true });
     }
     function pause() {
       if (state !== 'playing') return;
       setState('paused'); clearInput(); $('scope').hidden = true; $('crosshair').hidden = false; gun.visible = true; if (document.pointerLockElement === canvas) document.exitPointerLock();
-      showOverlay('游戏已暂停', [], '继续游戏', () => { setState('playing'); canvas.focus({ preventScroll: true }); lockPointer(); });
+      const resume = () => { setState('playing'); canvas.focus({ preventScroll: true }); lockPointer(); };
+      // Esc 是暂停键，暂停中再按 Esc 继续。
+      showOverlay('游戏已暂停', [], '继续游戏', resume, resume);
     }
     function finish(win, reason) {
       if (state !== 'playing') return;
@@ -950,7 +958,6 @@
       raf = requestAnimationFrame(render);
     }
     function resize() {
-      stage.style.setProperty('--fps-toolbar-height', '0px');
       const w = viewport.clientWidth, h = viewport.clientHeight;
       stage.style.setProperty('--fps-scope-size', h * 0.78 + 'px');
       renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); renderFrame(); drawRadar();

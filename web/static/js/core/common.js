@@ -13,19 +13,66 @@
     try { M.store.recordActivity(stageEl.dataset.game); } catch (e) { /* 存储失败不阻塞游戏 */ }
   }
 
+  /* —— 读屏播报 ——
+     离散事件（失误、暂停、重开）用 M.announce(text, true) 立即播报；
+     分数/最佳这类高频变化不逐次播报，按 5 秒节流合并成一句，避免持续打断。
+     #hud 本身是带 aria-label 的 group，辅助技术可以随时主动读取当前值。 —— */
+  var liveEl = null, hudTimer = null, hudAnnouncedAt = 0, hudLastText = '';
+  function live() {
+    if (!liveEl) {
+      liveEl = document.createElement('p');
+      liveEl.className = 'sr-only';
+      liveEl.setAttribute('role', 'status');
+      liveEl.setAttribute('aria-live', 'polite');
+      document.body.appendChild(liveEl);
+    }
+    return liveEl;
+  }
+  function hudText() {
+    var parts = [];
+    var label = document.getElementById('hud-score-label'), score = document.getElementById('hud-score');
+    if (score) parts.push((label ? label.textContent : '得分') + ' ' + score.textContent);
+    var best = document.getElementById('hud-best');
+    if (best) parts.push('最佳 ' + best.textContent);
+    return parts.join('，');
+  }
+  function scheduleHudAnnounce() {
+    if (hudTimer) return;
+    hudTimer = setTimeout(function () {
+      hudTimer = null;
+      var text = hudText();
+      if (!text || text === hudLastText) return;
+      hudAnnouncedAt = Date.now(); hudLastText = text;
+      live().textContent = text;
+    }, Math.max(0, 5000 - (Date.now() - hudAnnouncedAt)));
+  }
+  M.announce = function (text, immediate) {
+    if (!text) return;
+    if (immediate) {
+      clearTimeout(hudTimer); hudTimer = null;
+      hudLastText = '';
+      live().textContent = text;
+      return;
+    }
+    scheduleHudAnnounce();
+  };
+
   /* —— HUD —— */
   var hud = {
     score: function (v) {
       var el = document.getElementById('hud-score');
       if (el && v !== undefined && v !== null) el.textContent = v;
+      scheduleHudAnnounce();
     },
     best: function (v) {
       var el = document.getElementById('hud-best');
       if (el) el.textContent = v === undefined || v === null || v === '' ? '—' : v;
+      scheduleHudAnnounce();
     },
     label: function (name, text) {
       var el = document.getElementById('hud-' + name + '-label');
       if (el) el.textContent = text;
+      scheduleHudAnnounce();
     },
     /* extra 芯片：给游戏放第二指标或开关按钮（可多次调用追加），返回该芯片元素 */
     extra: function (el) {
@@ -45,7 +92,10 @@
     },
   };
   M.hud = hud;
-  M.gamePaused = function () { return !!document.querySelector('dialog[open]') || !!M.manualPause; };
+  /* 覆盖层也是「非游玩中」状态：它的按键不应该驱动背景游戏。 */
+  M.gamePaused = function () {
+    return !!document.querySelector('dialog[open]') || !!document.querySelector('.overlay') || !!M.manualPause;
+  };
 
   /* —— 顶栏「重新开始」按钮 —— */
   M.onRestart = function (fn) {
@@ -63,49 +113,128 @@
     return el;
   };
 
-  /* —— 覆盖层（开始 / 结束 / 暂停）。
-     舞台内容为空（如开局前）时覆盖层会塌陷，这里负责给舞台临时撑起最小高度 —— */
+  /* —— 覆盖层（开始 / 结束 / 暂停）——
+     同一舞台同时只保留一个覆盖层，新覆盖层出现时旧的先移除，
+     避免结算卡叠在新一局之上。覆盖层是 role="dialog"：出现时接管焦点、
+     Tab 在内部循环、关闭后把焦点还给原来的位置。 —— */
+  M.clearOverlays = function (stage) {
+    var host = stage || document.getElementById('stage');
+    if (!host) return;
+    Array.prototype.forEach.call(host.querySelectorAll('.overlay'), function (node) { node.remove(); });
+    host.style.minHeight = '';
+  };
+
+  var overlaySeq = 0;
   M.overlay = function (stage, opts) {
-    var hadMinHeight = !!stage.style.minHeight;
-    if (!hadMinHeight) stage.style.minHeight = 'min(84vw, 430px)';
+    opts = opts || {};
+    var host = stage;
+    M.clearOverlays(host);
+    var previous = document.activeElement;
+    if (!host.style.minHeight) host.style.minHeight = 'min(84vw, 430px)';
+    if (!host.hasAttribute('tabindex')) host.setAttribute('tabindex', '-1');
     if (opts.intro) {
-      stage.dataset.instructions = (opts.lines || []).join('\n');
+      host.dataset.instructions = (opts.lines || []).join('\n');
       opts = Object.assign({}, opts, { title: '', lines: [] });
     }
+    var actions = opts.actions && opts.actions.length ? opts.actions : [{ label: '开 始', primary: true }];
+    var seq = ++overlaySeq;
     var ov = document.createElement('div');
     ov.className = 'overlay';
+    ov.setAttribute('role', 'dialog');
+    ov.setAttribute('aria-modal', 'true');
     var card = document.createElement('div');
     card.className = 'overlay-card';
     if (opts.title) {
       var t = document.createElement('h2');
-      t.className = 'overlay-title';
+      t.className = 'overlay-title'; t.id = 'overlay-title-' + seq;
       t.textContent = opts.title;
       card.appendChild(t);
+      ov.setAttribute('aria-labelledby', t.id);
+    } else {
+      // 无标题时用动作名兜底，读屏也能知道这个覆盖层在问什么。
+      ov.setAttribute('aria-label', opts.label || actions[0].label);
     }
     if (opts.lines && opts.lines.length) {
       var p = document.createElement('p');
-      p.className = 'overlay-lines';
+      p.className = 'overlay-lines'; p.id = 'overlay-lines-' + seq;
       p.textContent = opts.lines.join('\n');
       card.appendChild(p);
+      ov.setAttribute('aria-describedby', p.id);
     }
     var choices = document.createElement('div');
     choices.className = 'choices';
-    (opts.actions || [{ label: '开 始', primary: true }]).forEach(function (a) {
+    function close(fn) {
+      var restore = previous;
+      Array.prototype.forEach.call(host.querySelectorAll('.overlay'), function (node) { node.remove(); });
+      host.style.minHeight = '';
+      if (restore && restore !== document.body && restore.isConnected && restore.focus) restore.focus({ preventScroll: true });
+      else host.focus({ preventScroll: true });
+      if (fn) fn();
+    }
+    actions.forEach(function (a) {
       var b = document.createElement('button');
       b.type = 'button';
       b.className = 'btn' + (a.primary ? ' primary' : '');
       b.textContent = a.label;
-      b.addEventListener('click', function () {
-        ov.remove();
-        if (!stage.querySelector('.overlay')) stage.style.minHeight = '';
-        if (a.onClick) a.onClick();
-      });
+      b.addEventListener('click', function () { close(a.onClick); });
       choices.appendChild(b);
     });
     card.appendChild(choices);
     ov.appendChild(card);
-    stage.appendChild(ov);
+    ov.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && typeof opts.onEscape === 'function') { e.preventDefault(); e.stopPropagation(); close(opts.onEscape); return; }
+      if (e.key !== 'Tab') return;
+      // 游戏会在返回后往 .choices 里补按钮，所以每次按键重新取可聚焦元素。
+      var nodes = ov.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (!nodes.length) return;
+      var first = nodes[0], last = nodes[nodes.length - 1];
+      if (e.shiftKey && (document.activeElement === first || !ov.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+    host.appendChild(ov);
+    (ov.querySelector('button') || card).focus({ preventScroll: true });
     return ov;
+  };
+
+  /* —— 通用确认弹窗（原生 dialog）——
+     Escape 关闭、焦点被浏览器约束在弹窗内、关闭后归还焦点给触发元素。
+     用于「会丢掉当前进度」的动作，例如 2048 的重新开始。 —— */
+  M.confirm = function (opts) {
+    opts = opts || {};
+    if (document.querySelector('dialog.game-confirm[open]')) return null;
+    var opener = document.activeElement;
+    var dlg = document.createElement('dialog');
+    dlg.className = 'game-confirm';
+    var title = document.createElement('h2');
+    title.id = 'game-confirm-title';
+    title.textContent = opts.title || '确认操作';
+    dlg.setAttribute('aria-labelledby', title.id);
+    var copy = document.createElement('p');
+    copy.textContent = opts.copy || '';
+    var actions = document.createElement('div');
+    actions.className = 'choices';
+    var cancel = document.createElement('button');
+    cancel.type = 'button'; cancel.className = 'btn';
+    cancel.textContent = opts.cancelLabel || '取消';
+    cancel.addEventListener('click', function () { dlg.close(); });
+    var ok = document.createElement('button');
+    ok.type = 'button'; ok.className = 'btn primary';
+    ok.textContent = opts.confirmLabel || '确定';
+    ok.addEventListener('click', function () { dlg.close(); if (opts.onConfirm) opts.onConfirm(); });
+    actions.appendChild(cancel); actions.appendChild(ok);
+    dlg.appendChild(title); dlg.appendChild(copy); dlg.appendChild(actions);
+    dlg.addEventListener('close', function () {
+      if (opener && opener !== document.body && opener.isConnected && opener.focus) opener.focus({ preventScroll: true });
+      else {
+        var stage = document.getElementById('stage');
+        if (stage) { if (!stage.hasAttribute('tabindex')) stage.setAttribute('tabindex', '-1'); stage.focus({ preventScroll: true }); }
+      }
+      dlg.remove();
+    });
+    document.body.appendChild(dlg);
+    dlg.showModal();
+    cancel.focus();
+    return dlg;
   };
 
   /* —— 轻提示 —— */
@@ -210,6 +339,14 @@
   var themeMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   var desiredTheme = themeRoot.dataset.theme;
   var themeTransition = null;
+  /* 开关类按钮要暴露当前状态：名称固定为「亮暗模式」，亮暗由 aria-pressed 表达。
+     首屏主题由 layout 内联脚本设置，因此这里必须主动同步一次初始值。 */
+  function syncToggle(t) {
+    if (!toggleBtn) return;
+    toggleBtn.setAttribute('aria-pressed', String(t === 'dark'));
+  }
+  syncToggle(themeRoot.dataset.theme);
+  window.addEventListener('themechange', function () { syncToggle(themeRoot.dataset.theme); });
   function settleTheme() {
     if (themeTransition || desiredTheme === themeRoot.dataset.theme) return;
     var target = desiredTheme;

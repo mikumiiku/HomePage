@@ -8,7 +8,7 @@
     <h1 class="game-heading">{{.Game.Title}}</h1>
   </div>
   {{if .Mismatch}}<div class="notice">这是「{{.Game.Badge}}」游戏，用你当前的设备玩可能不太顺手。</div>{{end}}
-  <div class="hud" id="hud">
+  <div class="hud" id="hud" role="group" aria-label="对局状态">
     <span class="hud-chip" data-hud="score"><span id="hud-score-label">得分</span> <b id="hud-score">0</b></span>
     <span class="hud-chip" data-hud="best">最佳 <b id="hud-best">—</b></span>
     <span class="hud-chip" id="hud-extra" hidden></span>

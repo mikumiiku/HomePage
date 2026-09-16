@@ -7,7 +7,7 @@ Go 实现的自制小游戏站：设备自动适配（手机/电脑）、莫奈�
 - 技术栈：Go 标准库（`net/http` + `html/template` + `go:embed`，无第三方依赖），前端原生 JS
 - 10 个小游戏：国际象棋（通用）、五子棋（通用）、围棋（通用）、沙城突击（3D 枪战，通用）、2048（通用）、贪吃蛇（通用）、记忆翻牌（通用）、扫雷（通用）、俄罗斯方块（电脑/键盘）、指尖快划（手机/触屏）
 - 亮暗模式：全站 token 化，右上角太阳/月亮切换（动画交叉旋转），跟随系统 + 手动持久化（app:appearance 槽位）
-- 主页背景：羊皮纸色默认，右上角半透明按钮上传图片，Cropper.js 框选裁剪后存 localStorage（app:appearance 槽位）
+- 主页背景：默认采用自托管油画底图，页面淡化呈现笔触、卡片使用纯色，右上角半透明按钮上传图片，Cropper.js 框选裁剪后存 localStorage（app:appearance 槽位）
 - 站点结构：`/` 导航页（`games.go` 的 `navItems` 注册入口）→ `/games/` 小游戏集合 → `/game/<id>` 游戏页；另有 `/about`；导航页「AI 对话」卡片指向 `/home`（浏览器直连）
 - 游戏图标来自 [game-icons.net](https://game-icons.net/)（Lorc、Delapouite、Faithtoken，CC BY 3.0），已去除图标自带的黑色底以适配 CSS mask 着色
 
