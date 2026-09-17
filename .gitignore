@@ -17,6 +17,9 @@ tests/shots/
 *.tmp
 *.bak
 
+# 外部 agent 的会话记录：含服务器路径等未脱敏内容，不入库
+codex-session*.md
+
 # 编辑器与系统
 .DS_Store
 .idea/
