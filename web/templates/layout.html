@@ -25,7 +25,8 @@
 </script>
 <link rel="stylesheet" href="/static/css/home.css?v={{.Ver}}">
 <style>:root {
-  --oil-painting: url("/static/img/monet-meadow.png?v={{.Ver}}");
+  --oil-painting: url("/static/img/monet-parasol-hd.jpg?v={{.Ver}}");
+  --oil-texture: url("/static/img/monet-meadow.png?v={{.Ver}}");
   --oil-painting-dark: url("/static/img/monet-waterlilies.jpg?v={{.Ver}}");
 }</style>
 {{block "extra_head" .}}{{end}}
@@ -33,7 +34,10 @@
 <body{{if eq .Title "主页"}} class="is-home"{{else if eq .Title "AI 对话"}} class="is-chat"{{else if eq .Game.ID "gomoku"}} class="is-gomoku"{{else if eq .Game.ID "go"}} class="is-go"{{end}}>
 <header class="site-header">
   {{if ne .Title "主页"}}<a class="brand home-wordmark" href="/">主页</a>{{end}}
-  <div class="header-actions"><nav class="site-nav" aria-label="主导航"><a href="/about" {{if eq .Title "关于"}}aria-current="page"{{end}}>关于</a></nav>
+  <div class="header-actions">{{if ne .Title "主页"}}<nav class="site-nav" aria-label="主导航"><a href="/about" {{if eq .Title "关于"}}aria-current="page"{{end}}>关于</a></nav>{{end}}
+  {{if eq .Title "主页"}}<button id="bg-upload" class="hero-btn" type="button" aria-label="更换背景图" title="更换背景图">
+    <span class="ti" style="--icon:url(/static/vendor/bootstrap-icons/images.svg?v={{.Ver}})" aria-hidden="true"></span>
+  </button>{{end}}
   <button id="theme-toggle" class="theme-toggle" type="button" aria-label="亮暗模式" aria-pressed="false" title="切换亮暗模式">
     <span class="ti ti-moon" style="--icon:url(/static/vendor/bootstrap-icons/moon-stars.svg?v={{.Ver}})" aria-hidden="true"></span>
     <span class="ti ti-sun" style="--icon:url(/static/vendor/bootstrap-icons/sun.svg?v={{.Ver}})" aria-hidden="true"></span>

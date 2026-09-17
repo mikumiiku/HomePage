@@ -1,7 +1,7 @@
 /* ============================================================
    主页 · 一馆两室
    两幅画：亮色《撑伞的女人》（户外）／暗色《睡莲》（池面）。
-   画作只在主页出现一次，其余页面是纸面 + 墨色 + 细线 + 一个强调色。
+   主页画作融入整页，其余页面保留清晰但不妨碍阅读的笔触底纹。
    颜色与尺度全部来自本文件顶部两块 token；不使用程序噪点。
    圆角政策：结构一律 0，不写 border-radius；只有真实圆形物体用 --radius-round。
    ============================================================ */
@@ -48,7 +48,11 @@
   --overlay: color-mix(in srgb, var(--ink) 14%, transparent);
   --scroll-thumb: #b0bcb2; --scroll-hover: #8fa094; --scroll-active: #6c8375;
   --photo-ink: #f6f8ef; --photo-shade: #0f2520b8;
-  --painting-opacity: .045; --painting-tone: #10242c00;
+  --painting-opacity: .16;
+  --home-painting-size: auto 100%;
+  --home-painting-mask: linear-gradient(90deg, transparent calc(100% - 81vh), var(--ink) calc(100% - 48vh));
+  --home-wash: #e7e9e3ed; --home-wash-mid: #e7e9e3b3;
+  --home-wash-clear: #e7e9e300;
 
   /* 棋类与游戏内色板（各游戏 CSS 消费，本次重做不动其值） */
   --chess-light: #e8eddf; --chess-dark: #8da78c; --chess-selected: #d3c47c; --chess-last: #bed1a1; --chess-mark: #244e30; --chess-check: #b84b39;
@@ -126,10 +130,14 @@ html[data-theme="dark"] {
   --overlay: color-mix(in srgb, #050d12 68%, transparent);
   --scroll-thumb: #3c525a; --scroll-hover: #5d7880; --scroll-active: #7cc4da;
   --photo-shade: #050d12c9;
-  /* 睡莲的强高光在暗底上会显出"幽灵图"，暗色底纹要比亮色更低 */
-  --painting-opacity: .028; --painting-tone: #0a121855;
+  --painting-opacity: .12;
+  --home-painting-size: cover;
+  --home-painting-mask: none;
+  --home-wash: #131b20ed; --home-wash-mid: #131b20b3;
+  --home-wash-clear: #131b2000;
   /* 暗色主题换一幅画：两间房各自挂自己的画。URL 由 layout.html 注入（需要资源指纹）。 */
   --oil-painting: var(--oil-painting-dark);
+  --oil-texture: var(--oil-painting-dark);
 
   color-scheme: dark;
   --chess-light: #a8b7a5; --chess-dark: #506d62; --chess-selected: #b9a864; --chess-last: #849b68; --chess-mark: #193f30; --chess-check: #c45b47;
@@ -176,11 +184,10 @@ body {
   isolation: isolate; -webkit-font-smoothing: antialiased;
 }
 
-/* 单张油画随视口裁切，不平铺、不随长页面拉伸，也不叠加高频噪点。
-   压到 4–5% 只是纸纹，画作本身在主页完整出现一次。 */
+/* 使用原画笔触，不平铺、不模糊、不叠加程序噪点。 */
 body::before {
   content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background: var(--oil-painting) center / cover no-repeat;
+  background: var(--oil-texture) center / cover no-repeat;
   opacity: var(--painting-opacity);
 }
 
@@ -299,12 +306,27 @@ h1.gallery-title { font-size: var(--step-4); margin-bottom: var(--space-5); }
 .recent-item .when { color: var(--ink-soft); font-size: var(--step--1); margin-left: var(--space-2); }
 
 /* ============================================================
-   主页首屏：画作满幅，全站唯一的亮部
+   主页：整页画作，阅读区与画面之间连续过渡
    ============================================================ */
-/* 主页不限制容器宽度，画作才能通栏；目录再收回到 1240 栏宽。 */
-.is-home .page { width: 100%; max-width: none; padding: 0; }
-.is-home .gallery { width: min(100%, 1240px); margin-inline: auto; padding-inline: var(--pad-x); }
+.is-home .page { justify-content: center; padding-block: var(--space-7) var(--space-8); }
+.is-home .gallery { width: min(100%, 360px); padding: var(--space-7) 0 0; }
+.is-home .placard { grid-template-columns: 26px minmax(0, 1fr); padding-block: var(--space-5); }
+.is-home .placard-tagline:empty { display: none; }
 .is-home .site-header { justify-content: flex-end; }
+.is-home .header-actions { gap: var(--space-1); }
+.is-home .header-actions button {
+  border: 0; background: transparent; color: var(--ink);
+  transition: background .18s;
+}
+.is-home .header-actions button:hover { background: color-mix(in srgb, var(--wall) 24%, transparent); }
+.is-home .header-actions button:focus-visible { background: color-mix(in srgb, var(--wall) 80%, transparent); }
+.is-home .header-actions .ti {
+  width: 20px; height: 20px;
+  filter: drop-shadow(0 1px 2px var(--wall)) drop-shadow(0 0 4px var(--wall));
+}
+.is-home .theme-toggle .ti { inset: 12px; }
+.is-home .site-footer { background: transparent; border: 0; }
+.is-home .site-footer p { width: min(100%, 1112px); }
 
 .home-wordmark {
   display: inline-block; width: max-content; white-space: nowrap;
@@ -313,41 +335,34 @@ h1.gallery-title { font-size: var(--step-4); margin-bottom: var(--space-5); }
 }
 .brand.home-wordmark { font-size: var(--step-2); }
 .hero-home {
-  position: relative;
-  min-height: 320px; height: clamp(360px, 42vw, 560px);
-  display: block; overflow: hidden; isolation: isolate;
-  background-color: var(--wall);
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background-image: var(--oil-painting);
-  background-size: cover; background-position: center;
+  background-size: var(--home-painting-size); background-position: right center;
+  background-repeat: no-repeat;
+  -webkit-mask-image: var(--home-painting-mask); mask-image: var(--home-painting-mask);
 }
-/* 压暗只为一件事：让左下标题在所有画面上都读得清。 */
+.hero-home.has-custom-bg { -webkit-mask-image: none; mask-image: none; }
+/* 只在文字一侧加遮罩，画面主体保留原始颜色和笔触。 */
 .hero-home::before {
-  content: ''; position: absolute; inset: 0; z-index: -1;
-  background: linear-gradient(to top, var(--photo-shade), transparent 62%),
-    linear-gradient(var(--painting-tone), var(--painting-tone));
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, var(--home-wash) 0%, var(--home-wash) 26%, var(--home-wash-mid) 43%, var(--home-wash-clear) 72%),
+    linear-gradient(0deg, var(--home-wash) 0%, var(--home-wash-clear) 20%);
   pointer-events: none;
 }
-.hero-home.has-custom-bg::before {
-  background: linear-gradient(to top, var(--photo-shade), transparent 62%);
-}
 .home-title {
-  position: absolute; bottom: clamp(28px, 4vw, 52px); left: clamp(28px, 4vw, 48px);
-  margin: 0; color: var(--photo-ink);
-  font-size: clamp(52px, 6vw, 80px); line-height: 1.15;
+  margin: 0; color: var(--ink);
+  font-size: clamp(48px, 5vw, 68px); line-height: 1.15;
 }
 
-/* 主页右上角：换背景按钮。方形细边，不做圆形气泡。 */
+/* 背景按钮与主题切换共用页头操作区。 */
 .hero-btn {
-  position: absolute; z-index: 2; top: var(--space-4); right: var(--space-4);
   width: var(--tap-min); height: var(--tap-min); border-radius: 0;
-  border: var(--rule-w) solid var(--photo-ink);
-  background: color-mix(in srgb, var(--photo-shade) 55%, transparent);
-  backdrop-filter: blur(5px);
-  color: var(--photo-ink); cursor: pointer;
+  border: 0; background: transparent;
+  color: var(--ink-soft); cursor: pointer;
   display: grid; place-items: center;
   transition: background .18s;
 }
-.hero-btn:hover { background: color-mix(in srgb, var(--photo-shade) 80%, transparent); }
+.hero-btn:hover { background: var(--card); color: var(--ink); }
 .hero-btn .ti { width: 18px; height: 18px; }
 
 /* ============================================================
@@ -505,9 +520,15 @@ html[data-theme="dark"] .theme-toggle .ti-moon { opacity: 0; transform: rotate(-
 .site-footer a { color: inherit; }
 
 /* ============================================================
-   窄屏：目录收成两列，画作给手机留更多高度
+   窄屏：画面在上方保留，文字移到下方的连续遮罩内
    ============================================================ */
 @media (max-width: 760px) {
+  .is-home .page { justify-content: flex-end; padding-top: clamp(220px, 38svh, 420px); padding-bottom: var(--space-7); }
+  .is-home .gallery { width: min(100%, 420px); padding-top: var(--space-6); }
+  .hero-home { background-size: cover; background-position: center 28%; -webkit-mask-image: none; mask-image: none; }
+  .hero-home::before {
+    background: linear-gradient(0deg, var(--home-wash) 0%, var(--home-wash) 28%, var(--home-wash-mid) 43%, var(--home-wash-clear) 68%);
+  }
   .placard { grid-template-columns: 24px minmax(0, 1fr); row-gap: var(--space-1); column-gap: var(--space-3); }
   .placard-title { grid-column: 2; }
   /* 窄屏不截断给语：那是列表里唯一说明「这游戏是什么」的信息 */
@@ -521,8 +542,6 @@ html[data-theme="dark"] .theme-toggle .ti-moon { opacity: 0; transform: rotate(-
   .hud { gap: var(--space-4); }
   .hud-chip b { font-size: var(--step-1); }
   .stage { width: 96vw; }
-  .hero-home { height: 400px; min-height: 300px; }
-  .home-title { left: var(--space-5); bottom: var(--space-5); }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 @media (forced-colors: active) { * { scrollbar-color: auto; } a, button { forced-color-adjust: auto; } }
