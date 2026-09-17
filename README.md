@@ -161,9 +161,9 @@ GOMOKU_BASE=http://127.0.0.1:8035 python3 tests/gomoku_test.py
 
 ## 围棋
 
-入口 `/game/go`，支持电脑和手机。提供 9、13、19 路离线人机与同屏双人，采用中国规则、白贴 7.5 目、禁止自杀与全局同形再现；连续停一手后核对死子并按数子法计分。人机轻松/标准/深入三档不依赖外部 API、在线模型或服务端存档，全部在页面本地的 Web Worker 里计算（约 160/700/2400ms）。
+入口 `/game/go`，支持电脑和手机。提供 9、13、19 路人机与同屏双人，采用中国规则、白贴 7.5 目、禁止自杀与全局同形再现；连续停一手后核对死子并按数子法计分。人机使用 GNU Go 3.8（GPLv3+），单线程 WebAssembly 在用户浏览器 Worker 内计算，服务端仅提供静态文件，不运行围棋搜索。无需 WebGPU、外部 API 或服务端模型，普通 HTTP 可用。引擎运行文件约 5.7 MiB，仅在人机首次落子时加载；同一棋局复用已加载 Worker，载入后断网也能继续计算。
 
-三档用的是不同算法而不是同一套拉长计时：轻松只按棋形打分并故意在靠前的候选里随机取子，不做后续判断；标准以棋形排序为先验，在 10 个候选上做限时蒙特卡洛推演（UCT，本地战术策略 + 数子法终局）；深入同样搜索但推演更多、候选更宽（16 个），形势判断和算路都更强。Worker 不可用时退回分时的快速搜索，本局仍可继续。
+低 / 中 / 高分别面向入门 / 训练 / 挑战：GNU Go level 0 / 3 / 10，另以不同概率和价值范围选择次优候选；高档采用首选点。具体参数、源码、许可和可复现构建见 `web/static/vendor/gnugo/SOURCES.md`。不标注未经测量的段位。计算时间随用户设备和局面变化；加载上限 60 秒，计算安全上限 20/30/45 秒。失败或超时保留棋局并显示「重试电脑落子」，也可悔棋或新局，不悄悄退回弱 AI。静态引擎文件同样携带二进制 mtime 指纹。
 
 支持悔棋、认输、自动续局、本地战绩与赛后复盘，不提供提示和棋钟。人机悔棋会撤回玩家最近一手及电脑回应，同屏双人撤回一手。触屏落点按实际网格单元命中并容忍轻微手指抖动；13/19 路默认先选择落点，通过局部放大图核对后确认。损坏或未来存档保留原值并允许导出，跨标签页更新会冻结旧页面。
 
@@ -171,10 +171,14 @@ GOMOKU_BASE=http://127.0.0.1:8035 python3 tests/gomoku_test.py
 
 ```bash
 node tests/go_engine_test.cjs
+node tests/go_ai_test.cjs
+# 可选：三档交替执黑白校准（不是段位评定）
+nice -n 15 node tests/go_ai_match.cjs 6
 go test ./...
 go build -o /tmp/homepage-go-preview .
 /tmp/homepage-go-preview -addr 127.0.0.1:8041
 GO_BASE=http://127.0.0.1:8041 python3 tests/go_test.py
+GO_BASE=http://127.0.0.1:8041 python3 tests/go_ai_browser_test.py
 ```
 
 截图输出到 `/tmp/go-verification/`；游戏图标来源见 `web/static/img/go-SOURCES.md`。

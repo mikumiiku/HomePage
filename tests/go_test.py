@@ -202,7 +202,7 @@ with sync_playwright() as playwright:
 
     delayed_worker = """window.Worker = class {
       constructor(){ window.goWorkers = window.goWorkers || []; window.goWorkers.push(this); }
-      postMessage(request){ this.request = request; }
+      postMessage(request){ this.request = request; this.onmessage({data:{game:request.game,request:request.request,status:'ready'}}); }
       terminate(){ this.terminated = true; }
     };"""
     context, page = setup(browser, init=delayed_worker)
@@ -257,9 +257,14 @@ with sync_playwright() as playwright:
     no_worker = "window.Worker = class { constructor(){ throw new Error('unavailable'); } };"
     context, page = setup(browser, init=no_worker)
     play_point(page, 40)
-    page.wait_for_function("document.querySelectorAll('.go-cell.black,.go-cell.white').length === 2", timeout=8000)
-    expect(page.locator("#go-notice")).to_contain_text("快速搜索")
-    done("Worker construction failure uses non-blocking fallback")
+    expect(page.locator("#go-retry-ai")).to_be_visible()
+    expect(page.locator("#go-status")).to_contain_text("无法启动")
+    assert page.locator(".go-cell.black,.go-cell.white").count() == 1
+    page.locator("#go-retry-ai").click()
+    expect(page.locator("#go-retry-ai")).to_be_visible()
+    page.locator("#go-undo").click()
+    assert page.locator(".go-cell.black,.go-cell.white").count() == 0
+    done("Worker failure preserves the game, offers retry and allows undo without weakening AI")
     context.close()
 
     context, page = setup(browser, fixture())

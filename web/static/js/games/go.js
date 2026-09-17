@@ -3,10 +3,10 @@
   var stage = M.stage('go'), savegame = M.savegame('go');
   var source = new URL(document.currentScript.src), workerURL = new URL('go-worker.js' + source.search, source);
   var key = M.store.PREFIX + 'go:main', data, session, state, readonly = false, conflict = false;
-  var worker = null, cancelFallback = null, watchdog = null, request = 0, busy = false;
+  var worker = null, watchdog = null, request = 0, busy = false, aiStatus = '', aiFailed = false;
   var preview = -1, cursor = 0, review = null, lastError = '', rawBefore = null, mounted = false;
   var cells = [], boardSize = 0, pointers = new Set(), gesture = null, fitFrame = 0;
-  var levels = { easy: '轻松', normal: '标准', hard: '深入' };
+  var levels = { easy: '低难度', normal: '中难度', hard: '高难度' };
 
   stage.closest('.game-shell').classList.add('go-shell');
   document.getElementById('hud').hidden = true;
@@ -33,11 +33,11 @@
           <div class="go-review" id="go-review-controls" hidden><button class="btn" data-review="first" type="button">开局</button><button class="btn" data-review="prev" type="button">上一步</button><span id="go-review-count"></span><button class="btn" data-review="next" type="button">下一步</button><button class="btn" data-review="last" type="button">末手</button><button class="btn" data-review="exit" type="button">结束复盘</button></div>
         </div>
         <aside class="go-controls go-side" aria-label="对局操作与新局设置">
-          <section class="go-session-actions"><h3>本局操作</h3><div class="go-actions"><button class="btn" id="go-pass" type="button">停一手</button><button class="btn" id="go-undo" type="button">悔棋</button><button class="btn" id="go-resign" type="button">认输</button><button class="btn" id="go-review" type="button" hidden>复盘本局</button></div></section>
+          <section class="go-session-actions"><h3>本局操作</h3><div class="go-actions"><button class="btn" id="go-retry-ai" type="button" hidden>重试电脑落子</button><button class="btn" id="go-pass" type="button">停一手</button><button class="btn" id="go-undo" type="button">悔棋</button><button class="btn" id="go-resign" type="button">认输</button><button class="btn" id="go-review" type="button" hidden>复盘本局</button></div></section>
           <section class="go-new-settings"><h3>新局设置</h3><div class="go-new-fields">
             <label for="go-mode">对战方式</label><select id="go-mode"><option value="ai">人机对战</option><option value="local">同屏双人</option></select>
             <label for="go-size">棋盘大小</label><select id="go-size"><option value="9">9 路</option><option value="13">13 路</option><option value="19">19 路</option></select>
-            <div class="go-ai-settings"><label for="go-level">电脑难度</label><select id="go-level"><option value="easy">轻松</option><option value="normal">标准</option><option value="hard">深入</option></select><label for="go-color">我的执棋</label><select id="go-color"><option value="black">黑棋先手</option><option value="white">白棋后手</option><option value="random">随机执棋</option></select></div>
+            <div class="go-ai-settings"><label for="go-level">电脑难度</label><select id="go-level"><option value="easy">低 · 入门</option><option value="normal">中 · 训练</option><option value="hard">高 · 挑战</option></select><label for="go-color">我的执棋</label><select id="go-color"><option value="black">黑棋先手</option><option value="white">白棋后手</option><option value="random">随机执棋</option></select></div>
           </div><p class="go-small">更改选项后，开始新局生效</p><button class="btn primary go-new" id="go-new" type="button">开始新局</button></section>
         </aside>
       </section>
@@ -47,7 +47,7 @@
       <div class="go-settings-scroll"><p class="go-settings-notice" id="go-settings-notice" role="status" hidden></p><aside class="go-side" aria-label="显示设置、棋谱与战绩">
         <section><h3>显示与落子</h3><label for="go-confirm-setting">落子确认</label><select id="go-confirm-setting"><option value="auto">按棋盘自动</option><option value="always">始终确认</option><option value="never">直接落子</option></select><label class="go-check"><input type="checkbox" id="go-numbers">显示手数</label><p class="go-small">自动模式下，触屏设备的 13 路和 19 路需要确认落子。</p></section>
         <details class="go-history-section"><summary>本局棋谱 <span id="go-game-kind"></span></summary><p class="go-small" id="go-history-empty">尚未落子</p><ol class="go-history" id="go-history" aria-label="落子记录"></ol></details>
-        <details><summary>规则与操作</summary><p>采用中国规则。黑棋先行，白棋贴 7.5 目；禁止自杀和重复此前出现过的全盘局面。提掉的棋子只用于对局提示，数子时不重复加分。</p><p>双方连续停一手后核对死子。点击棋子可标记或恢复整组死子，确认后按盘上棋子与围住的空点计分。对死子有异议时选择「继续对局」。</p><p>棋盘获得键盘焦点后，用方向键选择交叉点，Enter 或空格落子。需要确认时，再按一次 Enter 或空格即可确认，Escape 取消选择。</p><p>人机悔棋会撤回你最近一手及电脑此后的回应；同屏双人每次撤回一手。终局后不能悔棋。未完成的对局不计战绩。</p></details>
+        <details><summary>规则与操作</summary><p>低难度适合入门，战术计算较浅，较常选择次优落点；中难度加强攻防计算，适合练习；高难度使用完整搜索深度和首选落点。三档均在你的设备上计算，复杂局面可能需要更久。难度不对应固定段位。</p><p>围棋引擎：GNU Go 3.8（GPLv3）。<a href="/static/vendor/gnugo/SOURCES.md" target="_blank" rel="noopener">来源与构建说明</a> · <a href="/static/vendor/gnugo/COPYING" target="_blank" rel="noopener">许可证</a></p><p>采用中国规则。黑棋先行，白棋贴 7.5 目；禁止自杀和重复此前出现过的全盘局面。提掉的棋子只用于对局提示，数子时不重复加分。</p><p>双方连续停一手后核对死子。点击棋子可标记或恢复整组死子，确认后按盘上棋子与围住的空点计分。对死子有异议时选择「继续对局」。</p><p>棋盘获得键盘焦点后，用方向键选择交叉点，Enter 或空格落子。需要确认时，再按一次 Enter 或空格即可确认，Escape 取消选择。</p><p>人机悔棋会撤回你最近一手及电脑此后的回应；同屏双人每次撤回一手。终局后不能悔棋。未完成的对局不计战绩。</p></details>
         <details><summary>本地战绩</summary><div id="go-stats"></div><p class="go-small">只保存在当前浏览器</p></details>
         <div id="go-credits"></div>
       </aside></div>
@@ -142,10 +142,10 @@
     notice('另一页面已更新本局，已暂停操作，避免覆盖进度。请加载最新进度。', true);
     if (session) render();
   }
-  function cancelSearch() {
+  function cancelSearch(keepWorker) {
     request++;
-    if (worker) worker.terminate(); worker = null;
-    if (cancelFallback) cancelFallback(); cancelFallback = null;
+    if (!keepWorker) { if (worker) worker.terminate(); worker = null; }
+    aiFailed = false; aiStatus = '';
     clearTimeout(watchdog); watchdog = null; busy = false;
   }
   function lastStone(moves, size) {
@@ -263,39 +263,44 @@
     if (!conflict && session.phase === 'play' && session.settings.mode === 'ai' && state.turn !== session.human) computeAI();
   }
   function computeAI() {
-    cancelSearch(); busy = true; preview = -1;
-    var token = request, gameID = session.id, snapshot = session.moves.slice(), size = session.settings.size, fallbackUsed = false;
+    cancelSearch(!busy); busy = true; preview = -1; lastError = '';
+    var token = request, gameID = session.id, snapshot = session.moves.slice(), size = session.settings.size;
+    aiStatus = worker ? '电脑正在思考…' : '正在加载围棋引擎…';
     render();
+    function current() {
+      return request === token && session.id === gameID && !conflict && session.moves.length === snapshot.length && session.phase === 'play';
+    }
+    function fail(message) {
+      if (!current()) return;
+      cancelSearch(); aiFailed = true; lastError = message;
+      render();
+    }
     function receive(point) {
-      if (request !== token || session.id !== gameID || conflict || session.moves.length !== snapshot.length || session.phase !== 'play') return;
-      if (point !== -1) {
-        var legal = E.play(state, point);
-        if (!legal.ok) { fallback(); return; }
+      if (!current()) return;
+      if (!Number.isInteger(point) || (point !== -1 && !E.play(state, point).ok)) {
+        fail('电脑落点无效，请重试。'); return;
       }
-      cancelSearch();
+      cancelSearch(true);
       if (point === -1) passMove(true);
       else {
         var result = E.play(state, point); state = result.state; session.moves = state.moves.slice(); save(); render(); scheduleAI();
       }
     }
-    function fallback() {
-      if (request !== token || fallbackUsed) return;
-      fallbackUsed = true;
-      if (worker) worker.terminate(); worker = null; clearTimeout(watchdog);
-      notice('电脑搜索暂不可用，已切换为快速搜索，本局可继续游玩。');
-      cancelFallback = AI.fallback({ size: size, moves: snapshot }, receive);
-    }
     try {
-      worker = new Worker(workerURL);
+      if (!worker) worker = new Worker(workerURL);
       worker.onmessage = function (event) {
         var response = event.data;
-        if (response.game !== gameID || response.request !== token) return;
-        if (response.error) fallback(); else receive(response.move);
+        if (response.game !== gameID || response.request !== token || !current()) return;
+        if (response.status === 'ready') {
+          clearTimeout(watchdog); aiStatus = '电脑正在思考…'; render();
+          watchdog = setTimeout(function () { fail('本次计算超时，请重试或悔棋。'); }, AI.PROFILES[session.settings.level].timeout);
+        } else if (response.error) fail('围棋引擎暂不可用，请重试。');
+        else receive(response.move);
       };
-      worker.onerror = function (event) { event.preventDefault(); fallback(); };
+      worker.onerror = function (event) { event.preventDefault(); fail('围棋引擎未能运行，请重试或更换浏览器。'); };
       worker.postMessage({ game: gameID, request: token, size: size, moves: snapshot, level: session.settings.level, seed: randomSeed() });
-      watchdog = setTimeout(fallback, (AI.BUDGETS[session.settings.level] || 800) + 3000);
-    } catch (error) { fallback(); }
+      watchdog = setTimeout(function () { fail('围棋引擎加载超时，请检查网络后重试。'); }, AI.LOAD_TIMEOUT);
+    } catch (error) { fail('浏览器无法启动围棋引擎，请重试或更换浏览器。'); }
   }
 
   function buildBoard(size) {
@@ -383,8 +388,9 @@
     el('black-meta').textContent = '先手 · 提子 ' + state.captures[1]; el('white-meta').textContent = '贴 7.5 目 · 提子 ' + state.captures[2];
     el('black').classList.toggle('active', session.phase === 'play' && state.turn === 1); el('white').classList.toggle('active', session.phase === 'play' && state.turn === 2);
     el('count').textContent = displayed.length + ' 手';
-    var status = conflict ? '对局已暂停，请加载最新进度' : review !== null ? '复盘 · 第 ' + review + ' / ' + session.moves.length + ' 手' : session.phase === 'ended' ? resultText() : session.phase === 'scoring' ? (session.settings.mode === 'local' && session.confirmations.black ? '黑方已确认，请白方核对结果' : '请核对死子和计分结果') : busy ? '电脑正在思考…' : preview >= 0 ? '待确认 ' + E.coord(session.settings.size, preview) : lastError || (state.turn === 1 ? '轮到黑棋' : '轮到白棋');
+    var status = conflict ? '对局已暂停，请加载最新进度' : review !== null ? '复盘 · 第 ' + review + ' / ' + session.moves.length + ' 手' : session.phase === 'ended' ? resultText() : session.phase === 'scoring' ? (session.settings.mode === 'local' && session.confirmations.black ? '黑方已确认，请白方核对结果' : '请核对死子和计分结果') : busy ? aiStatus : preview >= 0 ? '待确认 ' + E.coord(session.settings.size, preview) : lastError || (state.turn === 1 ? '轮到黑棋' : '轮到白棋');
     el('status').textContent = status;
+    el('retry-ai').hidden = !aiFailed; el('retry-ai').disabled = conflict || busy;
     el('pass').disabled = !enabled; el('undo').disabled = undoIndex() < 0; el('resign').disabled = conflict || session.phase !== 'play' || review !== null;
     el('review').hidden = session.phase !== 'ended' || review !== null; el('review').disabled = conflict;
     el('board-controls').hidden = preview < 0 || session.phase !== 'play' || review !== null; el('confirm').disabled = !enabled || preview < 0;
@@ -492,6 +498,7 @@
   el('cancel-preview').addEventListener('click', function () { preview = -1; render(); cells[cursor].focus({ preventScroll: true }); });
   el('pass').addEventListener('click', function () { passMove(false); revealBoard(); });
   el('undo').addEventListener('click', undo);
+  el('retry-ai').addEventListener('click', scheduleAI);
   el('resign').addEventListener('click', function () { if (!el('resign').disabled) resignDialog.showModal(); });
   el('cancel-resign').addEventListener('click', function () { resignDialog.close(); });
   el('accept-resign').addEventListener('click', function () { resignDialog.close(); resign(); });
