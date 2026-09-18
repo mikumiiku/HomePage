@@ -12,15 +12,17 @@
 
   var stage = M.stage('squek');
   var G = M.savegame('squek');
+  var VER = new URL(document.currentScript.src).search;   // 静态资源指纹
 
   /* —— 规则常量 —— */
   var W = 36, H = 24;                 // 地图格数
   var BODY = 13;                      // 起手身长（= 手牌张数）
   var FIELD_TILES = 4;                // 场上常驻麻将数
-  var BASE_STEP = 180;                // 毫秒 / 格
+  var BASE_STEP = 360;                // 毫秒 / 格
   var SUDDEN_AT = 480;                // 8 分钟后进入终局（秒）
   var SUDDEN_SPAN = 20, SUDDEN_GAIN = 0.05, SPEED_CAP = 1.6;
-  var DISCARD_MS = 5000;              // 玩家弃牌限时
+  /* 选牌时间走日本麻将那套：每次思考给 12 银秒，用超了从每局共用的 30 金秒里扣。 */
+  var SILVER_MS = 12000, GOLD_MS = 30000;
   var AI_DISCARD_MS = 500;            // 电脑选牌思考时间
   var INVINCIBLE_MS = 3000;
   var DEATH_WAIT = [2000, 3000, 4000, 5000];
@@ -30,7 +32,7 @@
   var DIRS = { left: { x: -1, y: 0 }, right: { x: 1, y: 0 }, up: { x: 0, y: -1 }, down: { x: 0, y: 1 } };
 
   var PLAYERS = [
-    { id: 'player', name: '你', tag: 'YOU', human: true, color: '--sq-player' },
+    { id: 'player', name: 'YOU', tag: 'YOU', human: true, color: '--sq-player' },
     { id: 'cpu1', name: 'CPU.01', tag: 'CPU.01', human: false, color: '--sq-cpu1' },
     { id: 'cpu2', name: 'CPU.02', tag: 'CPU.02', human: false, color: '--sq-cpu2' },
     { id: 'cpu3', name: 'CPU.03', tag: 'CPU.03', human: false, color: '--sq-cpu3' }
@@ -53,7 +55,8 @@
     time: 0,                  // 对局秒数
     pool: [], field: [], snakes: [],
     winner: null, winners: [], huForm: '', doubleHu: false,
-    speed: 1, countdownEnd: 0, overAt: 0
+    speed: 1, countdownEnd: 0, overAt: 0,
+    gold: GOLD_MS                 // 每局共用的附加思考时间（毫秒）
   };
   var flights = [];           // 飞牌动画
   var pendingDirs = [];
@@ -86,8 +89,14 @@
   barHead.className = 'sq-bar-head';
   var barLabel = document.createElement('span');
   barLabel.className = 'sq-bar-label';
-  var barTimer = document.createElement('b');
+  var barTimer = document.createElement('span');
   barTimer.className = 'sq-bar-timer';
+  var silverEl = document.createElement('b');
+  silverEl.className = 'sq-silver';
+  var goldEl = document.createElement('b');
+  goldEl.className = 'sq-gold';
+  barTimer.appendChild(silverEl);
+  barTimer.appendChild(goldEl);
   barHead.appendChild(barLabel);
   barHead.appendChild(barTimer);
   var tilesRow = document.createElement('div');
@@ -150,6 +159,7 @@
     var availW = Math.max(80, wrap.clientWidth - 2);
     var stageTop = stage.getBoundingClientRect().top;
     var availH = window.innerHeight - stageTop - (plates.offsetHeight || 0) - (bar.offsetHeight || 0) - 30;
+    if (tilePx() !== lastTilePx) { lastTilePx = tilePx(); barSig = ''; }
     var raw = Math.min(availW / W, Math.max(24, availH) / H);
     var next = Math.max(5, Math.floor(raw));
     var changed = next !== cell;
@@ -227,6 +237,11 @@
    * 建模：开局、出生、场上牌
    * ============================================================ */
   function cloneCells(cells) { return cells.map(function (c) { return { x: c.x, y: c.y }; }); }
+  /* 电脑的动作不占中央横幅，改在它蛇头上弹一行小字（身体已消失时用死亡时的位置）。 */
+  function note(s, text, ms, at) {
+    s.note = { text: text, until: game.now + ms, cell: at ? { x: at.x, y: at.y } : null };
+  }
+
   function snakeById(id) { for (var i = 0; i < game.snakes.length; i++) if (game.snakes[i].id === id) return game.snakes[i]; return null; }
   function isInvincible(s) { return game.now < s.invincibleUntil; }
   /* 实体蛇参与碰撞；决策态、无敌期与死亡都不参与（第 15、28、33 节）。 */
@@ -293,7 +308,8 @@
     s.discardDeadline = 0;
     s.invincibleUntil = game.now + INVINCIBLE_MS;
     s.aiNextThink = game.now + AI.profileOf(settings.difficulty).think;
-    s.flash = null;
+    s.note = null;
+    if (!s.human) note(s, 'READY', 1300, s.segments[0]);
     return true;
   }
   /* 场上补牌：只放合法空白格，避开蛇头前方两格，并尽量与已有麻将拉开距离（第 13 节）。 */
@@ -342,6 +358,7 @@
     game.now = 0; game.time = 0; game.pool = []; game.field = [];
     game.snakes = []; game.winner = null; game.winners = []; game.huForm = '';
     game.doubleHu = false; game.speed = 1; game.countdownEnd = COUNTDOWN_MS; game.overAt = 0;
+    game.gold = GOLD_MS;
     flights = []; pendingDirs = []; viewing = 'player'; crashed = 0; barSig = '';
     flashUntil = 0; flashText = '';
     clearTimeout(huTimer);
@@ -350,7 +367,7 @@
         id: def.id, index: index, def: def, human: def.human,
         state: 'DEAD', ghost: true, dir: DIRS.right,
         segments: [], prev: [], hand: E.sortHand(wall.slice(at, at + BODY)),
-        invincibleUntil: 0, deathCount: 0, discardDeadline: 0,
+        invincibleUntil: 0, deathCount: 0, discardDeadline: 0, decisionStart: 0,
         aiNextThink: 0, respawnAt: 0, crash: null
       });
       at += BODY;
@@ -532,11 +549,14 @@
     s.state = 'DECISION';
     s.ghost = true;                                   // 决策态退出碰撞系统（第 15 节）
     s.deathCount = 0;                                 // 吃牌重置连续死亡计数（第 31 节）
-    s.discardDeadline = game.now + (s.human ? DISCARD_MS : AI_DISCARD_MS + rndInt(300));
+    s.decisionStart = game.now;
+    s.discardDeadline = s.human ? 0 : game.now + AI_DISCARD_MS + rndInt(300);
     if (s.human) {
       viewing = 'player';
       sfx.eat();
-      M.announce('吃进' + E.fullNameOfId(f.tile) + '，共十四张，五秒内打出一张', true);
+      M.announce('吃进' + E.fullNameOfId(f.tile) + '，共十四张，请打出一张', true);
+    } else {
+      note(s, 'DRAW', 900, s.segments[0]);
     }
     renderAll(true);
   }
@@ -557,6 +577,7 @@
     s.state = 'DEAD';
     s.ghost = true;
     s.crash = { reason: reason, until: game.now + CRASH_MS };
+    if (!s.human) note(s, 'CRASH', 1300, cells[0]);
     s.deathCount = Math.min(s.deathCount + 1, 4);
     s.respawnAt = game.now + DEATH_WAIT[s.deathCount - 1];
     s.discardDeadline = 0;
@@ -626,11 +647,14 @@
       game.speed = Math.min(SPEED_CAP, 1 + steps * SUDDEN_GAIN);
     }
     game.snakes.forEach(function (s) {
-      if (s.state === 'DECISION' && s.discardDeadline && game.now >= s.discardDeadline) {
-        var index = s.human ? playerDiscardIndex()
-          : AI.chooseDiscard(s.hand, seenCounts(), AI.personalityOf(s.id));
-        if (s.human && (index < 0 || index >= s.hand.length)) index = s.hand.length - 1;
-        doDiscard(s, index);
+      if (s.state === 'DECISION' && s.human) {
+        /* 银秒用完开始吃金秒，金秒见底才自动弃牌。 */
+        if (game.now - s.decisionStart > SILVER_MS) {
+          game.gold = Math.max(0, game.gold - dt);
+          if (game.gold <= 0) doDiscard(s, playerDiscardIndex());
+        }
+      } else if (s.state === 'DECISION' && s.discardDeadline && game.now >= s.discardDeadline) {
+        doDiscard(s, AI.chooseDiscard(s.hand, seenCounts(), AI.personalityOf(s.id)));
       } else if (s.state === 'DEAD' && !s.segments.length && game.now >= s.respawnAt) {
         if (s.crash && game.now >= s.crash.until) s.crash = null;
         respawn(s);
@@ -674,7 +698,7 @@
       lines.push(fastest && Math.round(game.time) <= fastest ? '新纪录：最快胡牌' : '最快纪录 ' + M.fmt.clock(fastest));
     }
     M.overlay(stage, {
-      title: game.doubleHu ? 'DOUBLE HU · 双胡' : (playerWon ? 'PLAYER WINS · 你赢了' : game.winner.def.name + ' WINS'),
+      title: game.doubleHu ? 'DOUBLE HU' : (playerWon ? 'PLAYER WINS' : game.winner.def.name + ' WINS'),
       lines: lines,
       actions: [{ label: '再来一局', primary: true, onClick: startRound }]
     });
@@ -691,19 +715,110 @@
     return { x: lerp(before.x, cur.x, t), y: lerp(before.y, cur.y, t) };
   }
 
-  /* 牌面：象牙白底 + 花色条 + 数字/字。字体串按字号缓存，避免每张牌都重新解析。 */
+  /* —— 牌面：矢量画法，数字牌完全不依赖字体 ——
+     筒 = 圆点阵（大点点成圆环），条 = 竹节，万 = 大号数字，字牌 = 大字/白板方框，
+     字牌在格子太小时改用拉丁首字母，任何尺寸都不会糊成一团。 */
+  var PIPS = {
+    1: [[.5, .5]],
+    2: [[.5, .3], [.5, .7]],
+    3: [[.26, .22], [.5, .5], [.74, .78]],
+    4: [[.3, .3], [.7, .3], [.3, .7], [.7, .7]],
+    5: [[.27, .27], [.73, .27], [.5, .5], [.27, .73], [.73, .73]],
+    6: [[.32, .2], [.68, .2], [.32, .5], [.68, .5], [.32, .8], [.68, .8]],
+    7: [[.28, .15], [.5, .28], [.72, .41], [.3, .7], [.7, .7], [.3, .9], [.7, .9]],
+    8: [[.32, .14], [.68, .14], [.32, .38], [.68, .38], [.32, .62], [.68, .62], [.32, .86], [.68, .86]],
+    9: [[.25, .25], [.5, .25], [.75, .25], [.25, .5], [.5, .5], [.75, .5], [.25, .75], [.5, .75], [.75, .75]]
+  };
+  var PIP_R = { 1: .3, 2: .19, 3: .16, 4: .155, 5: .145, 6: .125, 7: .105, 8: .11, 9: .105 };
+  var HONOR_CJK = ['东', '南', '西', '北', '中', '发', '白'];
+  var HONOR_LATIN = ['E', 'S', 'W', 'N', 'C', 'F', 'P'];
+
+  function honorColor(idx) {
+    if (idx === 4) return P.m;      // 中：红
+    if (idx === 5) return P.s;      // 发：绿
+    if (idx === 6) return P.p;      // 白：蓝
+    return P.line;                  // 风牌：墨色
+  }
+  function roundRectPath(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+  function drawPips(c, n, bx, by, bw, bh, color, stick) {
+    var layout = PIPS[n], u = Math.min(bw, bh);
+    for (var i = 0; i < layout.length; i++) {
+      var px = bx + layout[i][0] * bw, py = by + layout[i][1] * bh;
+      c.fillStyle = color;
+      if (stick) {
+        /* 竹节：细长胶囊 + 中间一道浅色节环，比纯色块更像条子。 */
+        var w = Math.max(1.5, u * (n <= 3 ? 0.19 : n <= 6 ? 0.15 : 0.125));
+        var h = Math.min(bh * (n <= 3 ? 0.34 : 0.26), w * 2.6);
+        roundRectPath(c, px - w / 2, py - h / 2, w, h, w / 2);
+        c.fill();
+        if (h >= 6 && w >= 3) {
+          c.fillStyle = P.face;
+          c.fillRect(px - w / 2, py - Math.max(0.5, h * 0.06), w, Math.max(1, h * 0.12));
+        }
+      } else {
+        var r = Math.max(1.4, u * PIP_R[n]);
+        c.beginPath(); c.arc(px, py, r, 0, Math.PI * 2); c.fill();
+        if (r >= 3.2) {           // 够大就抠出圆心，接近传统筒子
+          c.fillStyle = P.face;
+          c.beginPath(); c.arc(px, py, r * 0.42, 0, Math.PI * 2); c.fill();
+        }
+      }
+    }
+  }
+  function drawHonor(c, kind, bx, by, bw, bh) {
+    var idx = E.rankOf(kind) - 1;
+    if (idx === 6) {              // 白板：传统就是一块空白带框
+      var pad = Math.max(1.5, bw * 0.14);
+      c.strokeStyle = P.p;
+      c.lineWidth = Math.max(1.5, bw * 0.1);
+      c.strokeRect(bx + pad, by + pad, bw - pad * 2, bh - pad * 2);
+      return;
+    }
+    var big = bh >= 15;
+    var text = big ? HONOR_CJK[idx] : HONOR_LATIN[idx];
+    c.font = '800 ' + Math.round(bh * (big ? 0.78 : 0.88)) + 'px ' + P.font;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillStyle = honorColor(idx);
+    c.fillText(text, bx + bw / 2, by + bh * 0.54);
+  }
+  /* 一张牌：象牙白底 + 花色条 + 花色图案。c 可以是棋盘 ctx，也可以是手牌条里的小画布。 */
+  function paintTile(c, kind, x, y, size, alpha) {
+    c.globalAlpha = alpha === undefined ? 1 : alpha;
+    var suit = E.suitOf(kind), rank = E.rankOf(kind);
+    c.fillStyle = P.face;
+    c.fillRect(x, y, size, size);
+    var strip = suitColor(kind);
+    var sh = Math.max(1.5, Math.round(size * 0.16));
+    c.fillStyle = strip;
+    c.fillRect(x, y, size, sh);
+    var bx = x + size * 0.1, by = y + sh + size * 0.05;
+    var bw = size * 0.8, bh = size - sh - size * 0.1;
+    if (suit === 'm') {
+      c.font = '800 ' + Math.max(7, Math.round(bh * 0.86)) + 'px ' + P.font;
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.fillStyle = strip;
+      c.fillText(String(rank), x + size / 2, by + bh * 0.53);
+    } else if (suit === 'p') {
+      drawPips(c, rank, bx, by, bw, bh, strip, false);
+    } else if (suit === 's') {
+      drawPips(c, rank, bx, by, bw, bh, strip, true);
+    } else {
+      drawHonor(c, kind, bx, by, bw, bh);
+    }
+    c.globalAlpha = 1;
+  }
   function tileFace(kind, px, py, size, alpha) {
-    ctx.globalAlpha = alpha === undefined ? 1 : alpha;
-    ctx.fillStyle = P.face;
-    ctx.fillRect(px, py, size, size);
-    var color = suitColor(kind);
-    ctx.fillStyle = color;
-    ctx.fillRect(px, py, size, Math.max(1.5, size * 0.18));
-    var text = cell >= 15 ? E.label(kind) : (E.isHonor(kind) ? E.label(kind) : String(E.rankOf(kind)));
-    var font = '700 ' + Math.max(6, Math.round(size * (text.length > 1 ? 0.44 : 0.56))) + 'px ' + P.font;
-    if (font !== fontNow) { ctx.font = font; fontNow = font; }
-    ctx.fillText(text, px + size / 2, py + size * 0.62);
-    ctx.globalAlpha = 1;
+    paintTile(ctx, kind, px, py, size, alpha);
   }
 
   function drawSnake(s, alpha) {
@@ -750,6 +865,29 @@
     }
   }
 
+  function drawNotes() {
+    for (var i = 0; i < game.snakes.length; i++) {
+      var s = game.snakes[i];
+      if (!s.note || game.now >= s.note.until) continue;
+      var cellPos = s.segments.length ? s.segments[0] : s.note.cell;
+      if (!cellPos) continue;
+      var life = (s.note.until - game.now) / 1000;
+      var alpha = Math.min(1, life * 2);
+      var size = Math.max(9, Math.round(cell * 0.5));
+      ctx.globalAlpha = alpha;
+      ctx.font = '800 ' + size + 'px ' + P.font;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      var tx = ox + cellPos.x * cell + cell / 2;
+      var ty = cellPos.y * cell - 3;
+      ctx.fillStyle = P.line;
+      ctx.fillText(s.note.text, tx + 1, ty + 1);
+      ctx.fillStyle = P.players[s.id] || P.line;
+      ctx.fillText(s.note.text, tx, ty);
+      ctx.globalAlpha = 1;
+    }
+  }
+
   function draw(alpha) {
     if (!ctx) return;
     var px = cell * W, py = cell * H, i;
@@ -787,6 +925,7 @@
       if (fl.kind >= 0) tileFace(E.kindOf(fl.kind), ox + x * cell + pad, y * cell + pad, size, 1 - t);
     });
     game.snakes.forEach(function (s) { drawSnake(s, alpha); });
+    drawNotes();
     /* 撞击闪白、胡牌闪金（设计文档第 57、25 节） */
     if (crashing) {
       ctx.globalAlpha = 0.18 + 0.18 * Math.abs(Math.sin(game.now / 40));
@@ -795,8 +934,8 @@
       ctx.globalAlpha = 1;
     }
     var sinceWin = game.now - game.overAt;
-    if (game.overAt && sinceWin < 700) {
-      ctx.globalAlpha = 0.45 * (1 - sinceWin / 700) * (0.5 + 0.5 * Math.abs(Math.sin(sinceWin / 40)));
+    if (game.overAt && sinceWin < 560) {
+      ctx.globalAlpha = 0.34 * (1 - sinceWin / 560) * (0.5 + 0.5 * Math.abs(Math.sin(sinceWin / 40)));
       ctx.fillStyle = P.win;
       ctx.fillRect(0, 0, px, py);
       ctx.globalAlpha = 1;
@@ -809,14 +948,19 @@
   /* ============================================================
    * HTML 面板：状态牌、手牌条、横幅
    * ============================================================ */
+  /* 局内状态用英文短标签：小字号下比汉字清楚，也避免中文字形在小格子里的糊边。 */
   function stateLabel(s) {
-    if (s.state === 'WINNER') return '胡牌';
-    if (s.state === 'DEAD') return '重生 ' + Math.max(0, Math.ceil((s.respawnAt - game.now) / 1000)) + ' 秒';
-    if (s.state === 'DECISION') return s.human ? '选一张打' : '选牌中';
-    if (isInvincible(s)) return '无敌 ' + Math.max(1, Math.ceil((s.invincibleUntil - game.now) / 1000)) + ' 秒';
-    if (s.ghost) return '幽灵中';
-    if (!s.hand.length) return '空手';
-    return settings.hint ? E.shantenText(E.shanten(s.hand)) : s.hand.length + ' 张牌';
+    if (s.state === 'WINNER') return 'WIN';
+    if (s.state === 'DEAD') return 'RESPAWN ' + Math.max(0, Math.ceil((s.respawnAt - game.now) / 1000));
+    if (s.state === 'DECISION') return 'CHOOSE';
+    if (isInvincible(s)) return 'INVINCIBLE ' + Math.max(1, Math.ceil((s.invincibleUntil - game.now) / 1000));
+    if (s.ghost) return 'GHOST';
+    if (!s.hand.length) return 'DEALING';
+    return settings.hint ? shantenText(s) : s.hand.length + ' TILES';
+  }
+  function shantenText(s) {
+    var n = E.shanten(s.hand);
+    return n <= 0 ? 'TENPAI' : n + '-SHANTEN';
   }
   function renderPlates() {
     var html = '';
@@ -831,6 +975,29 @@
     });
     plates.innerHTML = html;
   }
+  /* 手牌条里的一张牌：按钮 + 一块只画一次的牌面画布。 */
+  function tileButton(tile, index, acting) {
+    var px = tilePx();
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'sq-tile' + (acting ? '' : ' is-static');
+    button.dataset.index = index;
+    if (!acting) button.disabled = true;
+    button.setAttribute('aria-label', (acting ? '打出' : '手牌') + E.fullNameOfId(tile));
+    var cv = document.createElement('canvas');
+    var dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(px * dpr);
+    cv.height = Math.round(px * dpr);
+    cv.style.width = px + 'px';
+    cv.style.height = px + 'px';
+    var c = cv.getContext('2d');
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    paintTile(c, E.kindOf(tile), 0, 0, px, 1);
+    button.appendChild(cv);
+    return button;
+  }
+  function tilePx() { return window.innerWidth < 420 ? 34 : 40; }
+
   /* 手牌条：决策时可点；其余时间是公开信息查看器。 */
   function renderBar(force) {
     var target = snakeById(viewing) || snakeById('player');
@@ -840,41 +1007,65 @@
     if (force || sig !== barSig) {
       barSig = sig;
       bar.classList.toggle('is-acting', acting);
-      var html = '';
+      tilesRow.innerHTML = '';
+      if (!target.hand.length) {
+        var empty = document.createElement('span');
+        empty.className = 'sq-bar-empty';
+        empty.textContent = 'DEALING…';
+        tilesRow.appendChild(empty);
+      }
       target.hand.forEach(function (tile, i) {
-        var kind = E.kindOf(tile);
-        html += '<button type="button" class="sq-tile' + (acting ? '' : ' is-static') +
-          '" data-index="' + i + '"' + (acting ? '' : ' disabled') +
-          ' style="--sq-tile:' + suitColor(kind) + '" aria-label="' +
-          (acting ? '打出' : '手牌') + E.fullNameOfId(tile) + '">' +
-          '<span class="sq-tile-label">' + E.label(kind) + '</span></button>';
+        tilesRow.appendChild(tileButton(tile, i, acting));
       });
-      tilesRow.innerHTML = html || '<span class="sq-bar-empty">手牌已回到牌库，等待重生…</span>';
-      barLabel.textContent = acting ? '打出其中一张'
-        : (viewing === 'player' || !viewing ? '你的手牌' : target.def.name + '的手牌（公开）');
+      barLabel.textContent = acting ? 'PICK ONE'
+        : (viewing === 'player' || !viewing ? 'YOUR HAND' : target.def.name + ' · PUBLIC');
     }
     var me = snakeById('player');
-    if (me && me.state === 'DECISION' && me.human && me.discardDeadline) {
-      var left = Math.max(0, (me.discardDeadline - game.now) / 1000);
-      barTimer.textContent = left.toFixed(1) + ' 秒';
-      bar.style.setProperty('--sq-left', (left / (DISCARD_MS / 1000) * 100).toFixed(1) + '%');
-    } else if (barTimer.textContent) {
-      barTimer.textContent = '';
+    if (me && me.state === 'DECISION' && me.human) {
+      /* 银秒用完才开始扣金秒（日麻那种两段计时）。 */
+      var used = (game.now - me.decisionStart) / 1000;
+      var silver = Math.max(0, SILVER_MS / 1000 - used);
+      var gold = game.gold / 1000;
+      silverEl.textContent = silver.toFixed(1);
+      goldEl.textContent = gold.toFixed(1);
+      barTimer.title = '银秒 ' + silver.toFixed(1) + '，金秒 ' + gold.toFixed(1);
+      barTimer.setAttribute('aria-label', barTimer.title);
+      var overGold = silver <= 0;
+      barTimer.classList.toggle('is-gold', overGold);
+      bar.style.setProperty('--sq-left',
+        (overGold ? gold / (GOLD_MS / 1000) : silver / (SILVER_MS / 1000)) * 100 + '%');
+      bar.style.setProperty('--sq-clock', overGold ? 'var(--sq-gold)' : 'var(--sq-silver)');
+    } else {
+      if (silverEl.textContent) silverEl.textContent = '';
+      goldEl.textContent = (game.gold / 1000).toFixed(1);
+      barTimer.title = '本局剩余金秒 ' + goldEl.textContent;
+      barTimer.setAttribute('aria-label', barTimer.title);
+      barTimer.classList.remove('is-gold');
       bar.style.setProperty('--sq-left', '0%');
     }
   }
+  /* 界面图标统一用自托管 Bootstrap Icons，用 mask 取色。文字标签留给读屏与悬停提示。 */
+  function icon(name, label) {
+    return '<span class="ti" role="img" aria-label="' + label + '" title="' + label +
+      '" style="--icon:url(/static/vendor/bootstrap-icons/' + name + '.svg' + VER + ')"></span>';
+  }
   function renderHud() {
     var best = G.load().data.best;
-    M.hud.label('score', '牌库');
+    var labelEl = document.getElementById('hud-score-label');
+    if (labelEl && !labelEl.dataset.squek) {
+      labelEl.dataset.squek = '1';
+      /* 图标给眼睛，sr-only 文本给读屏与 HUD 播报（播报读的是 textContent）。 */
+      labelEl.innerHTML = icon('box-seam', '牌库') + '<span class="sr-only">牌库</span>';
+    }
     M.hud.score(game.pool.length);
     M.hud.best(best && best.wins ? '胡牌 ' + best.wins + ' 局' : '—');
     var chip = M.hud.extra();
     if (chip) {
       if (!chip.dataset.squek) {
         chip.dataset.squek = '1';
-        chip.innerHTML = '<span class="sq-stat">场上 <b id="sq-field">0</b></span>' +
-          '<span class="sq-stat">时间 <b id="sq-time">0:00</b></span>' +
-          '<span class="sq-stat">速度 <b id="sq-speed">100%</b></span>';
+        chip.innerHTML = '<span class="sq-stat">' + icon('grid-3x3-gap', '场上牌数') + ' <b id="sq-field">0</b></span>' +
+          '<span class="sq-stat">' + icon('clock', '对局时间') + ' <b id="sq-time">0:00</b></span>' +
+          '<span class="sq-stat">' + icon('speedometer2', '移动速度') + ' <b id="sq-speed">100%</b></span>';
       }
       chip.hidden = false;
       var f = document.getElementById('sq-field'), t = document.getElementById('sq-time'), sp = document.getElementById('sq-speed');
@@ -883,6 +1074,7 @@
       if (sp) sp.textContent = Math.round(game.speed * 100) + '%';
     }
   }
+  var lastTilePx = 0;
   function renderAll(force) {
     if (!game.snakes.length) return;
     renderPlates();
@@ -905,21 +1097,21 @@
     if (game.phase === 'COUNTDOWN') {
       var left = game.countdownEnd - game.now;
       var step = Math.ceil(left / 800);
-      showMsg(step > 3 ? '准备' : String(step));
+      showMsg(step > 3 ? 'READY' : String(step));
       return;
     }
-    if (game.phase === 'OVER') { showMsg('胡'); bannerClass('is-hu'); return; }
+    if (game.phase === 'OVER') { showMsg('HU'); bannerClass('is-hu'); return; }
     if (game.now < flashUntil) { showMsg(flashText); return; }
     if (game.phase === 'PLAYING' && game.now < game.countdownEnd + GO_MS) { showMsg('GO'); return; }
+    /* 中央横幅只讲玩家自己的事；电脑的吃牌、撞击与重生在它蛇头上弹小字。 */
     var deciding = false, crashing = false, waiting = null;
     game.snakes.forEach(function (s) {
-      if (s.state === 'DECISION' && s.human) deciding = true;
+      if (!s.human) return;
+      if (s.state === 'DECISION') deciding = true;
       if (s.crash && game.now < s.crash.until) crashing = true;
-      /* 只有玩家自己的重生等待才占中央横幅，电脑的死亡看状态牌就够了。 */
-      if (s.state === 'DEAD' && !s.segments.length && s.human) waiting = s;
+      if (s.state === 'DEAD' && !s.segments.length) waiting = s;
     });
-    /* 玩家要选牌时优先显示提示，别被同时发生的撞击盖掉。 */
-    if (deciding) { showMsg('DRAW · 打出一张'); bannerClass('is-big'); return; }
+    if (deciding) { showMsg('DRAW · PICK ONE'); bannerClass('is-big'); return; }
     if (crashing) { showMsg('CRASH'); bannerClass('is-crash'); return; }
     if (waiting) { showMsg('RESPAWN'); return; }
     var me = snakeById('player');
@@ -1028,10 +1220,10 @@
     var best = G.load().data.best;
     var lines = settings.seen
       ? ['吃牌凑成四组牌加一对牌就赢。撞墙、撞自己、撞到别的蛇都会重生并换一副手牌。',
-        '场上常驻四张麻将，吃满十四张要在五秒内打掉一张。']
+        '场上常驻四张麻将。吃满十四张后选一张打掉：每次思考 12 银秒，不够用再扣每局共用的 30 金秒。']
       : ['MOVE｜方向键 / WASD 转向，也可以在地图上滑动',
         'EAT A TILE｜蛇头碰到麻将就吃进来',
-        'DISCARD ONE｜吃满十四张，在五秒内点一张打掉',
+        'DISCARD ONE｜吃满十四张，点一张打掉（每次 12 银秒 + 每局 30 金秒）',
         'MAKE A HAND｜四组牌加一对牌就能胡',
         'CRASH = NEW HAND｜碰撞会重生并换一副手牌'];
     lines.push('当前难度：' + (DIFF_LABEL[settings.difficulty] || '普通'));
@@ -1130,6 +1322,8 @@
     state: function () {
       return {
         phase: game.phase, time: game.time, pool: game.pool.length, speed: game.speed,
+        gold: game.gold, silver: SILVER_MS,
+        stepMs: BASE_STEP,
         field: game.field.map(function (f) { return { x: f.x, y: f.y, tile: E.labelOfId(f.tile) }; }),
         winner: game.winner ? game.winner.def.name : null,
         huForm: game.huForm, doubleHu: game.doubleHu,

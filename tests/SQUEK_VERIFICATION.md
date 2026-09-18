@@ -15,6 +15,17 @@
 
 截图与状态快照：`/tmp/squek-verification/`（01-start、02-playing、03-discard、04-spectate、05-paused、06-running、07-hu、08-result、04-1440x900 / 04-390x844 / 04-844x390 / 04-320x568、05-dark、report.json）。人工检查了开局画面、对局、弃牌手牌条、观战、暂停、胡牌闪金与结算、竖屏与横屏、深色主题。
 
+## 2026-09-18 第二轮调整（用户反馈）
+
+用户反馈三点：汉字显示异常（黑边盖住字面）、麻将牌面字体不清晰、难度太高。改动与验证：
+
+- 中央横幅去掉 `-webkit-text-stroke`，改为无衬线字体 + 硬阴影；局内短标签改英文（READY / DRAW · PICK ONE / CRASH / RESPAWN / INVINCIBLE / HU，状态牌 TENPAI / n-SHANTEN / CHOOSE / WIN / GHOST / DEALING）；HUD 的四项统计改成自托管 Bootstrap Icons（box-seam / grid-3x3-gap / clock / speedometer2，新下载四个 SVG）+ 数字，含义放在 aria-label 与 title。
+- 牌面全部改为矢量绘制（筒=圆点阵、条=带节竹节、万=大号数字、字牌大字或白板空白方框，格子不够大时字牌退化成 E/S/W/N/C/F/P），数字牌不再使用字体；手牌条改为每张牌一块独立小画布（34/40px），与棋盘同一套画法。
+- 移动每格 180ms → 360ms；玩家选牌改为日麻式两段计时（12 银秒 + 每局 30 金秒，金秒见底才自动弃牌），手牌条右侧常驻读数与进度条。
+- 电脑的吃牌 / 撞击 / 重生改为在它蛇头上弹一行小字（约 1 秒淡出），中央横幅只显示玩家自己的事件。
+
+回归：`node tests/squek_engine_test.cjs` 10 项、`node tests/squek_ai_test.cjs` 8 项、`go test ./...` 通过；`python3 tests/squek_test.py` 12 组通过（新增银秒用完后开始扣金秒的断言），`python3 tests/game_layout_test.py` 47 组通过，浏览器 console 与 pageerror 为 0。截图：`/tmp/squek-verification/11-new-hud.png`（新 HUD 与牌面）、`03-discard.png`（DRAW · PICK ONE + 银/金秒）、`12-cpu-note.png`（电脑蛇头小字 + 中央只报玩家撞击）、`07-hu.png`（HU 横幅）、`04-390x844.png`（手机两行手牌）。
+
 ## 已知边界
 
 - 单局不存档：刷新页面即重开，存档只记录战绩与偏好（squek:main v1）。

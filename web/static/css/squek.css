@@ -34,19 +34,24 @@
 }
 .canvas-frame.sq-frame canvas { display: block; margin-inline: auto; touch-action: none; image-rendering: auto; }
 
-/* —— 中央横幅：倒计时 / DRAW / CRASH / 胡 —— */
+/* —— 中央横幅：倒计时 / DRAW / CRASH / HU ——
+   不用 -webkit-text-stroke：描边画在字形之上，会盖掉字面颜色（就是之前的黑边）。
+   新粗野主义本来就只要硬阴影，字面颜色保持干净。 */
 .sq-msg {
   position: absolute; inset: 0; margin: 0; display: grid; place-items: center;
+  padding: 0 10px; text-align: center;
   pointer-events: none; opacity: 0; transition: opacity .1s;
-  font: 800 clamp(28px, 6vw, 64px)/1 var(--font-display); letter-spacing: .04em;
-  color: var(--sq-player); text-shadow: 3px 3px 0 var(--sq-shadow);
-  -webkit-text-stroke: 1px var(--sq-shadow);
+  font: 800 clamp(24px, 5vw, 52px)/1.05 var(--font-body);
+  letter-spacing: .08em; text-transform: uppercase;
+  color: var(--sq-player);
+  text-shadow: 3px 3px 0 var(--sq-shadow);
 }
 .sq-msg.is-on { opacity: 1; }
 .sq-msg.is-hu {
-  font-size: clamp(72px, 22vw, 220px); color: var(--sq-win);
-  -webkit-text-stroke: 3px var(--sq-shadow);
-  animation: sq-hu .45s cubic-bezier(.2, 1.6, .3, 1) both;
+  font-size: clamp(64px, 16vw, 168px); color: var(--sq-win);
+  letter-spacing: .1em;
+  text-shadow: 6px 6px 0 var(--sq-shadow);
+  animation: sq-hu .5s cubic-bezier(.2, 1.6, .3, 1) both;
 }
 @keyframes sq-hu {
   from { transform: scale(.4) rotate(-6deg); opacity: 0; }
@@ -63,36 +68,43 @@
 }
 .sq-bar::after {
   content: ""; position: absolute; left: 0; bottom: 0; height: 5px;
-  width: var(--sq-left, 0%); background: var(--sq-player);
+  width: var(--sq-left, 0%); background: var(--sq-clock, var(--sq-player));
   transition: width .12s linear;
 }
 .sq-bar.is-acting { border-color: var(--sq-player); }
 .sq-bar-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
 .sq-bar-label { color: var(--ink-soft); font-size: 12px; }
-.sq-bar-timer { color: var(--sq-player); font: 700 14px/1 var(--font-figure); font-variant-numeric: tabular-nums; }
+.sq-bar-timer {
+  display: inline-flex; align-items: baseline; gap: 8px;
+  font: 700 14px/1 var(--font-figure); font-variant-numeric: tabular-nums;
+}
+.sq-bar-timer .sq-silver { color: var(--sq-silver); }
+.sq-bar-timer .sq-gold { color: var(--sq-gold); }
+.sq-bar-timer .sq-silver:empty, .sq-bar-timer .sq-gold:empty { display: none; }
+.sq-bar.is-acting .sq-silver { font-size: 19px; }
+.sq-bar-timer.is-gold .sq-gold { font-size: 19px; }
 .sq-tiles { display: flex; flex-wrap: wrap; gap: 4px; padding-bottom: 2px; }
 .sq-bar-empty { color: var(--ink-soft); font-size: 12px; }
 
 .sq-tile {
-  flex: 0 0 auto; width: 34px; height: 46px; padding: 0; cursor: pointer;
-  border: 2px solid var(--sq-edge); border-top: 7px solid var(--sq-tile);
-  border-radius: 0; background: var(--sq-face); color: var(--sq-tile);
+  flex: 0 0 auto; padding: 0; cursor: pointer;
+  border: 2px solid var(--sq-edge); border-radius: 0; background: var(--sq-face);
   box-shadow: 2px 2px 0 var(--sq-shadow);
-  font: 700 13px/1 var(--font-body);
-  display: grid; place-items: center;
+  display: grid; place-items: center; line-height: 0;
   transition: transform .08s, box-shadow .08s;
 }
-.sq-tile-label { transform: translateY(2px); }
-.sq-tile:hover { background: color-mix(in srgb, var(--sq-tile) 12%, var(--sq-face)); }
+.sq-tile canvas { display: block; }
 .sq-tile:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--sq-shadow); }
-.sq-tile.is-static { cursor: default; opacity: .78; box-shadow: none; }
-.sq-tile.is-static:hover { background: var(--sq-face); }
+.sq-tile.is-static { cursor: default; opacity: .8; box-shadow: none; }
 
 /* —— 设置面板里的雀蛇选项 —— */
 .sq-settings { display: flex; flex-direction: column; gap: 12px; }
 .sq-settings .sq-field { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; }
 .sq-settings select { min-width: 120px; }
 .sq-settings .sq-check { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; }
+
+/* —— HUD 图标：数字为主，含义交给图标与读屏标签 —— */
+.hud .ti { display: inline-block; width: 14px; height: 14px; vertical-align: -2px; }
 
 /* —— HUD 补充项 —— */
 .sq-stat { margin-left: 10px; }
@@ -102,7 +114,6 @@
 /* 矮屏（手机横屏）不给手牌换行，改成一行横向滚动，保住棋盘高度。 */
 @media (max-height: 560px) {
   .sq-tiles { flex-wrap: nowrap; overflow-x: auto; }
-  .sq-tile { width: 26px; height: 34px; font-size: 11px; border-top-width: 5px; }
   .sq-plate { padding: 2px 6px; font-size: 11px; }
   .sq-bar-head { margin-bottom: 4px; }
 }

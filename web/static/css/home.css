@@ -90,7 +90,7 @@
   --sq-face: #fdfbf4;
   --sq-m: #a83226; --sq-p: #1d4e79; --sq-s: #2c6636; --sq-z: #6b2f52;
   --sq-player: #c9381f; --sq-cpu1: #2a67ad; --sq-cpu2: #a8720a; --sq-cpu3: #2f7a3f;
-  --sq-win: #a8720a;
+  --sq-win: #a8720a; --sq-silver: #55666f; --sq-gold: #96690f;
 
   /* —— 字体 ——
      拉丁与数字走自托管 EB Garamond，中文回落到系统宋体（标题）或系统无衬线（正文）。
@@ -174,7 +174,7 @@ html[data-theme="dark"] {
   --sq-face: #e6dfcd;
   --sq-m: #b8342a; --sq-p: #27639b; --sq-s: #327243; --sq-z: #7a3a5c;
   --sq-player: #ff6b4f; --sq-cpu1: #5aa6f0; --sq-cpu2: #f2c445; --sq-cpu3: #63c877;
-  --sq-win: #f0c25a;
+  --sq-win: #f0c25a; --sq-silver: #b3c6d0; --sq-gold: #f0c25a;
   --chat-wall: var(--wall); --chat-panel: var(--card); --chat-rule: var(--rule);
 }
 

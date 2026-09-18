@@ -169,7 +169,13 @@ Canonical UI Map：导航/标题模板 game.html；按钮/主题/焦点/滚动�
 
 四家固定配色：玩家红、CPU.01 蓝、CPU.02 黄、CPU.03 绿；牌面字色与花色条统一使用较深的 `--sq-m/p/s/z`，不随主题反转。状态牌是按钮（左侧 8px 主题色描边），点击把手牌摊到下方只读手牌条，符合「所有蛇的牌都公开」的规则；玩家自己选牌时手牌条锁定在玩家身上并显示倒计时进度条。中央横幅按优先级显示：短促反馈（DISCARD + 牌）→ 玩家的选牌提示 → CRASH → RESPAWN → INVINCIBLE → GO/胡。胡牌时整屏闪金、中央出现巨大「胡」字，随后弹出结算覆盖层，展示胜者十四张牌与牌型。
 
-无障碍：手牌与状态牌都是原生 button 并带中文 aria-label（牌名用「三万 / 红中」全称），关键事件经 App.announce 播报；canvas 只作 `role="img"` 的视觉主体，信息另有文字来源。Esc 暂停走公共 `M.overlay`（覆盖层存在即 M.gamePaused 为真，蛇、倒计时与飞牌动画全部停住）。减少动态偏好关闭胡字动画与按压过渡。
+牌面用矢量绘制，不依赖字体：筒子是圆点阵（够大时抠出圆心）、条子是带节竹节、万子是大号数字、字牌在格子里够大时用汉字（白板画成传统空白方框），格子太小时字牌退化成 E/S/W/N/C/F/P 首字母。数字牌完全不用字体，任何尺寸都不糊；手牌条里每张牌也是同一套画法的独立小画布，与棋盘完全一致。
+
+局内短标签统一用英文（READY / GO / DRAW · PICK ONE / CRASH / RESPAWN / INVINCIBLE / HU，状态牌的 TENPAI / n-SHANTEN / CHOOSE / WIN / GHOST / DEALING），长句与设置项仍是中文。HUD 的牌库、场上牌数、时间与速度改成自托管 Bootstrap Icons 图标 + 数字，含义放 aria-label 与 title。中央横幅不写 `-webkit-text-stroke`：描边绘制在字形之上，会盖掉字面颜色（浅色字面被黑边吃掉），改用粗硬阴影，与新粗野主义一致。中央横幅只播报玩家自己的事件（倒计时、选牌、撞击、重生、无敌、胡牌）；电脑的吃牌 / 撞击 / 重生在它自己的蛇头上弹一行带硬阴影的小字，2 秒内淡出。
+
+思考时间采用日麻式两段计时：每次选牌 12 银秒，用超后从每局共用的 30 金秒里实时扣除，金秒见底才自动弃牌；手牌条右侧常驻银/金读数，非选牌时只显示金秒，进度条颜色随当前在扣哪一段切换（`--sq-silver` / `--sq-gold`）。移动每格 360ms。
+
+无障碍：手牌与状态牌都是原生 button 并带中文 aria-label（牌名用「三万 / 红中」全称），关键事件经 App.announce 播报；canvas 只作 `role="img"` 的视觉主体，信息另有文字来源。Esc 暂停走公共 `M.overlay`（覆盖层存在即 M.gamePaused 为真，蛇、倒计时与飞牌动画全部停住）。减少动态偏好关闭 HU 动画与按压过渡。
 
 Canonical UI Map：导航与标题 game.html / layout.html；颜色与控件 home.css；HUD/覆盖层/输入 common.js（方向键与滑动）；舞台尺寸与设置弹窗 game-ui.js（雀蛇在 `game-ui.js` 中只取满宽度，格子尺寸由 squek.js 按剩余高度换算，棋盘外框贴合棋盘并居中）；棋盘与对局 squek.js；麻将规则 squek-engine.js；电脑决策 squek-ai.js；样式 squek.css。验证：tests/squek_engine_test.cjs、tests/squek_ai_test.cjs、tests/squek_test.py、tests/game_layout_test.py。
 

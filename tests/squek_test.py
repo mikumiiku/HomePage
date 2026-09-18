@@ -110,7 +110,7 @@ with sync_playwright() as p:
     page.screenshot(path=str(OUT / '02-playing.png'))
 
     # 抢牌：朝最近的场上牌走，直到吃进一张（最多 40 秒）
-    deadline = 40000
+    deadline = 90000
     eaten = False
     while deadline > 0 and not eaten:
         st = page.evaluate('App.squek.state()')
@@ -138,6 +138,24 @@ with sync_playwright() as p:
 
     # 决策态是幽灵：其他蛇可以穿过，自己不会死
     assert me['ghost'] is True, me
+
+    # 思考时间：银秒 12 秒先走，用超了才扣每局 30 金秒（日麻那种两段计时）
+    timer = page.evaluate("""() => ({
+      silver: document.querySelector('.sq-bar-timer .sq-silver').textContent,
+      gold: document.querySelector('.sq-bar-timer .sq-gold').textContent,
+      label: document.querySelector('.sq-bar-label').textContent
+    })""")
+    assert timer['label'] == 'PICK ONE', timer
+    assert 0 < float(timer['silver']) <= 12.0, timer
+    assert float(timer['gold']) == 30.0, timer
+    page.wait_for_timeout(13000)
+    after = page.evaluate('App.squek.state()')
+    me_after = next(x for x in after['snakes'] if x['id'] == 'player')
+    if after['phase'] == 'PLAYING' and me_after['state'] == 'DECISION':
+        assert after['gold'] < 30000, ('银秒用完后应该开始扣金秒', after['gold'])
+        shown = page.evaluate("document.querySelector('.sq-bar-timer .sq-gold').textContent")
+        assert float(shown) < 30.0, shown
+    results.append(dict(case='time-bank', timer=timer, gold_after=after['gold']))
 
     # 弃牌：点手牌条第一张，回到 13 张、场上回到 4 张，牌库不变
     page.locator('.sq-tile').first.click()
@@ -170,7 +188,7 @@ with sync_playwright() as p:
           st: App.squek.state()
         })""")
         target = next(x for x in snap['st']['snakes'] if x['id'] == cid)
-        if '公开' not in snap['label']:
+        if 'PUBLIC' not in snap['label']:
             continue
         assert snap['tiles'] == target['tiles'], snap
         assert snap['disabled'] == snap['tiles'], ('别人的手牌应当是只读的', snap)
@@ -292,7 +310,7 @@ with sync_playwright() as p:
     assert over['winner'], over
     assert over['huForm'] == '七对子', over
     assert len(over['winner']) > 0
-    expect(page.locator('.sq-msg')).to_have_text('胡')
+    expect(page.locator('.sq-msg')).to_have_text('HU')
     page.screenshot(path=str(OUT / '07-hu.png'))
 
     # 结算面板：胜者名字、牌型与十四张牌
