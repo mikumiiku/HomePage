@@ -355,7 +355,11 @@ h1.gallery-title { font-size: var(--step-4); margin-bottom: var(--space-5); }
   background-repeat: no-repeat;
   -webkit-mask-image: var(--home-painting-mask); mask-image: var(--home-painting-mask);
 }
-.hero-home.has-custom-bg { -webkit-mask-image: none; mask-image: none; }
+/* 自定义壁纸是全站一张图（见 common.js 的 applyWallpaper）：主页铺满，不套默认油画的遮罩与尺寸。 */
+html.has-custom-wallpaper .hero-home {
+  background-size: cover; background-position: center;
+  -webkit-mask-image: none; mask-image: none;
+}
 /* 只在文字一侧加遮罩，画面主体保留原始颜色和笔触。 */
 .hero-home::before {
   content: ''; position: absolute; inset: 0;
@@ -378,6 +382,26 @@ h1.gallery-title { font-size: var(--step-4); margin-bottom: var(--space-5); }
 }
 .hero-btn:hover { background: var(--card); color: var(--ink); }
 .hero-btn .ti { width: 18px; height: 18px; }
+
+/* 重置按钮从更换按钮左侧滑出：整个操作区都是悬停目标，滑出过程中指针不会离开
+   触发区，因此不会来回抖动。绝对定位，不影响页头其它元素的位置。
+   没有自定义壁纸时（.can-reset 缺失）整个按钮不参与布局与键盘顺序。 */
+.is-home .header-actions .hero-actions { position: relative; display: flex; }
+.is-home .header-actions .hero-reset {
+  position: absolute; top: 0; right: 100%;
+  opacity: 0; visibility: hidden; transform: translateX(10px);
+  transition: opacity .2s, transform .28s cubic-bezier(.4, 0, .2, 1), visibility .28s;
+}
+.hero-actions:not(.can-reset) .hero-reset { display: none; }
+/* 键盘用户用 :focus-visible，避免鼠标操作后焦点回到更换按钮时把重置按钮留在页面上。 */
+.hero-actions.can-reset:hover .hero-reset,
+.hero-actions.can-reset:has(:focus-visible) .hero-reset {
+  opacity: 1; visibility: visible; transform: translateX(-6px);
+}
+/* 触屏没有悬停：有自定义壁纸时按钮直接常驻，否则只能从裁剪弹窗里恢复。 */
+@media (hover: none) {
+  .hero-actions.can-reset .hero-reset { opacity: 1; visibility: visible; transform: translateX(-6px); }
+}
 
 /* ============================================================
    游戏页

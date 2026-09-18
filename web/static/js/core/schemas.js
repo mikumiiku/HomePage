@@ -174,11 +174,17 @@
       };
     },
   });
-  // 外观偏好：亮暗主题（'' = 跟随系统）+ 主页背景图（dataURL，可能较大，读写仅限主页）
+  // 外观偏好：亮暗主题（'' = 跟随系统）+ 壁纸（dataURL，可能较大，全站只读、仅主页可写）。
+  // 亮暗各存一张：heroImage 亮色、heroImageDark 暗色；null = 该主题用默认油画。
   D('app', 'appearance', {
-    version: 1,
+    version: 2,
+    migrations: {1: function (d) {
+      // v1 只有一张图、两个主题共用；升级后两套主题都保持原样，之后各自独立替换。
+      d.heroImageDark = d.heroImage || null;
+      return d;
+    }},
     defaults: function () {
-      return { theme: '', heroImage: null };
+      return { theme: '', heroImage: null, heroImageDark: null };
     },
   });
 })(window.App);

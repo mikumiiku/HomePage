@@ -81,6 +81,7 @@ v2 代码读 v1 存档靠 defaults 补齐；v1 代码（理论上）遇到 v2 �
 | 槽位 | 结构 | 用途 |
 | --- | --- | --- |
 | `app:activity` | `{ counts: {gameId: 次数}, recent: [{g, t}] ≤12 }` | 首页「最近在玩」 |
+| `app:appearance` | `{ theme, heroImage, heroImageDark }` | 亮暗主题（`''` = 跟随系统）与全站壁纸；两张图各管一个主题，`null` = 默认油画 |
 
 未来可加：`app:profile`（昵称/头像）、`app:settings`（全局偏好）等，同样是 defineSlot 一行登记。
 

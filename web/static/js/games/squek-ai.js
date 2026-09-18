@@ -2,7 +2,8 @@
  * 只做「往哪走」和「打哪张」两个决策；移动、碰撞、计时都由 squek.js 负责。
  *
  * 目标评分 = 麻将价值 × 安全系数 ÷ 路径成本（设计文档第 36 节）。
- * 路径用 BFS 在危险地图上求：蛇身是墙，其他蛇头前方一格是风险区。 */
+ * 路径用 BFS 在危险地图上求：蛇身是障碍，其他蛇头前方一格是风险区。
+ * 地图边界是循环的，BFS 与预判都在环面（torus）上计算。 */
 (function (root) {
   'use strict';
   var E = root.SquekEngine;
@@ -85,8 +86,8 @@
       for (var d = 0; d < DIRS.length; d++) {
         var nx = o.head.x, ny = o.head.y;
         for (var step = 1; step <= steps; step++) {
-          nx += DIRS[d].x; ny += DIRS[d].y;
-          if (nx < 0 || ny < 0 || nx >= w || ny >= h) break;
+          nx = (nx + DIRS[d].x + w) % w;
+          ny = (ny + DIRS[d].y + h) % h;
           risk[ny * w + nx] += 1;
           if (blocked[ny * w + nx]) break;
         }
@@ -95,7 +96,7 @@
     return { blocked: blocked, risk: risk };
   }
 
-  /* 从某格做 BFS：返回距离表（-1 不可达）与可达格数。 */
+  /* 从某格做 BFS（边界环绕）：返回距离表（-1 不可达）与可达格数。 */
   function bfs(grid, w, h, sx, sy) {
     var dist = new Int16Array(w * h).fill(-1);
     if (sx < 0 || sy < 0 || sx >= w || sy >= h || grid.blocked[sy * w + sx]) {
@@ -109,8 +110,7 @@
       var at = queue[head++], x = at % w, y = (at / w) | 0;
       area++;
       for (var d = 0; d < DIRS.length; d++) {
-        var nx = x + DIRS[d].x, ny = y + DIRS[d].y;
-        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        var nx = (x + DIRS[d].x + w) % w, ny = (y + DIRS[d].y + h) % h;
         var np = ny * w + nx;
         if (dist[np] !== -1 || grid.blocked[np]) continue;
         dist[np] = dist[at] + 1;
@@ -128,7 +128,8 @@
       var step = Math.max(1, view.profile.predict);
       var ox = o.head.x, oy = o.head.y;
       for (var s = 1; s <= step; s++) {
-        ox += o.dir.x; oy += o.dir.y;
+        ox = (ox + o.dir.x + view.w) % view.w;
+        oy = (oy + o.dir.y + view.h) % view.h;
         if (ox === x && oy === y) { danger += s === 1 ? 3 : 1; break; }
       }
       /* 换位：双方同时踩进对方当前蛇头，视为对撞。 */
@@ -146,8 +147,7 @@
     for (var d = 0; d < DIRS.length; d++) {
       var dir = DIRS[d];
       if (dir.x === reverse.x && dir.y === reverse.y) continue;
-      var nx = self.head.x + dir.x, ny = self.head.y + dir.y;
-      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      var nx = (self.head.x + dir.x + w) % w, ny = (self.head.y + dir.y + h) % h;
       var np = ny * w + nx;
       if (grid.blocked[np]) continue;
       var path = bfs(grid, w, h, nx, ny);

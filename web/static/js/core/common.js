@@ -384,4 +384,27 @@
   themeMotion.addEventListener('change', function () {
     if (themeMotion.matches && themeTransition) themeTransition.skipTransition();
   });
+
+  /* —— 壁纸（app:appearance 的亮暗两张图，全站共用）——
+     自定义图顶替默认油画：--oil-texture 给内页底纹、--oil-painting 给主页整页画面。
+     写成行内自定义属性，两套主题各用自己那张；没有自定义就移除，回落到 CSS 里的默认油画。 */
+  function applyWallpaper(data) {
+    var image = (data && (M.theme.isDark() ? data.heroImageDark : data.heroImage)) || null;
+    var root = document.documentElement;
+    if (image) {
+      root.style.setProperty('--oil-painting', 'url("' + image + '")');
+      root.style.setProperty('--oil-texture', 'url("' + image + '")');
+    } else {
+      root.style.removeProperty('--oil-painting');
+      root.style.removeProperty('--oil-texture');
+    }
+    root.classList.toggle('has-custom-wallpaper', !!image);
+  }
+  function syncWallpaper() {
+    var state = M.store.load('app', 'appearance');
+    if (!state.fromFuture) applyWallpaper(state.data);
+  }
+  syncWallpaper();
+  window.addEventListener('themechange', syncWallpaper);
+  M.wallpaper = { apply: applyWallpaper, sync: syncWallpaper };
 })(window.App);

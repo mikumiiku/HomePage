@@ -1,25 +1,24 @@
-/* 主页导航页：背景图（默认油画 → 用户上传替换）+ 裁剪流程 */
+/* 主页导航页：背景图裁剪 UI（默认油画 → 用户上传替换）。
+   壁纸本身由 common.js 的 M.wallpaper 全站应用，这里只管上传/裁剪与重置按钮。 */
 (function (M) {
   'use strict';
   var hero = document.getElementById('hero');
   if (!hero) return;
   var S = M.store;
+  var actions = document.getElementById('hero-actions');
 
-  function apply(data) {
-    hero.classList.toggle('has-custom-bg', !!data.heroImage);
-    if (data.heroImage) {
-      hero.style.backgroundImage = 'url("' + data.heroImage + '")';
-      hero.style.backgroundSize = 'cover';
-      hero.style.backgroundPosition = 'center';
-    } else {
-      hero.style.backgroundImage = '';
-      hero.style.backgroundSize = '';
-      hero.style.backgroundPosition = '';
-    }
+  /* 亮暗各一张壁纸，互不影响；null = 该主题回到默认油画（取值见 home.css 的 --oil-painting）。 */
+  function field() { return M.theme.isDark() ? 'heroImageDark' : 'heroImage'; }
+
+  /* 重置按钮只在当前主题确实有自定义壁纸时出现（没有就是空按钮）。 */
+  function syncReset() {
+    if (!actions) return;
+    var s = S.load('app', 'appearance');
+    actions.classList.toggle('can-reset', !s.fromFuture && !!s.data[field()]);
   }
-
-  var st = S.load('app', 'appearance');
-  if (!st.fromFuture) apply(st.data);
+  syncReset();
+  // 换主题即换画：重置按钮跟着当前主题那张图出现或收起。
+  window.addEventListener('themechange', syncReset);
 
   var btn = document.getElementById('bg-upload');
   if (!btn) return;
@@ -76,8 +75,9 @@
       if (act === 'cancel') {
         closeModal();
       } else if (act === 'reset') {
-        S.update('app', 'appearance', function (d) { d.heroImage = null; });
-        apply(S.load('app', 'appearance').data);
+        S.update('app', 'appearance', function (d) { d[field()] = null; });
+        M.wallpaper.apply(S.load('app', 'appearance').data);
+        syncReset();
         M.toast('已恢复默认背景');
         closeModal();
       } else if (act === 'save') {
@@ -92,9 +92,10 @@
         var next = canvas.toDataURL('image/jpeg', 0.85);
         var state = S.load('app', 'appearance');
         if (state.fromFuture) { M.toast('存档版本较新，无法覆盖'); return; }
-        state.data.heroImage = next;
+        state.data[field()] = next;
         if (S.save('app', 'appearance', state.data)) {
-          apply(state.data);
+          M.wallpaper.apply(state.data);
+          syncReset();
           M.toast('背景已更新');
           closeModal();
         }
@@ -116,5 +117,19 @@
       reader.readAsDataURL(file);
     });
     input.click();
+  });
+
+  // 滑出的重置按钮：只清掉当前亮暗主题那一张，另一主题保持不变。
+  var resetBtn = document.getElementById('bg-reset');
+  if (resetBtn) resetBtn.addEventListener('click', function () {
+    var state = S.load('app', 'appearance');
+    if (state.fromFuture) { M.toast('存档版本较新，无法覆盖'); return; }
+    if (!state.data[field()]) return;
+    state.data[field()] = null;
+    if (!S.save('app', 'appearance', state.data)) return;
+    M.wallpaper.apply(state.data);
+    syncReset();
+    M.toast('已恢复默认背景');
+    btn.focus(); // 按钮随后收起，把焦点交还给更换按钮，键盘操作不丢位置
   });
 })(window.App);

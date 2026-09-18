@@ -1,7 +1,7 @@
 /* 雀蛇 · 麻将贪吃蛇
  *
  * 四条蛇（玩家 + 三台电脑）在网格里抢场上四张麻将：吃掉一张就多一个身体节点，
- * 手里凑到 14 张时先判胡牌，没胡就在 5 秒内打掉一张；撞墙、撞自己或撞到别的蛇
+ * 手里凑到 14 张时先判胡牌，没胡就打掉一张；地图边界是循环的，撞自己或撞到别的蛇
  * 会死亡并换一副新起手牌重生。先胡牌的一方获胜。
  *
  * 地图与蛇用 canvas 画（60FPS 插值），手牌、状态与操作条用 HTML。
@@ -322,7 +322,6 @@
       if (isMoving(s) && s.segments.length) heads.push({ h: s.segments[0], d: s.dir });
     }
     function allowed(cx, cy) {
-      if (cx < 1 || cy < 1 || cx > W - 2 || cy > H - 2) return false;
       if (occ[cellKey(cx, cy)]) return false;
       for (var k = 0; k < heads.length; k++) {
         var h = heads[k].h, d = heads[k].d;
@@ -332,8 +331,8 @@
       return true;
     }
     var level3 = [], level2 = [], level1 = [];
-    for (y = 1; y < H - 1; y++) {
-      for (x = 1; x < W - 1; x++) {
+    for (y = 0; y < H; y++) {
+      for (x = 0; x < W; x++) {
         if (!allowed(x, y)) continue;
         var gap = 99;
         for (var f = 0; f < game.field.length; f++) {
@@ -440,15 +439,17 @@
       var s = game.snakes[i];
       if (!isMoving(s) || !s.segments.length) { s.prev = s.segments; continue; }
       applyDirection(s);
-      var head = { x: s.segments[0].x + s.dir.x, y: s.segments[0].y + s.dir.y };
-      var wall = head.x < 0 || head.y < 0 || head.x >= W || head.y >= H;
-      var f = wall ? null : fieldAt(head.x, head.y);
-      plans.push({ s: s, head: head, wall: wall, eat: f, ate: !!f, dead: null, win: null });
+      /* 边界是循环的：从一边出去就从对边回来（不判墙死）。 */
+      var head = {
+        x: (s.segments[0].x + s.dir.x + W) % W,
+        y: (s.segments[0].y + s.dir.y + H) % H
+      };
+      var f = fieldAt(head.x, head.y);
+      plans.push({ s: s, head: head, eat: f, ate: !!f, dead: null, win: null });
     }
     var byId = {};
     plans.forEach(function (p) { byId[p.s.id] = p; });
     plans.forEach(function (p) {
-      if (p.wall) { p.dead = '墙'; return; }
       var s = p.s;
       /* 撞自己：尾巴会让开，无敌期不判自杀（第 33 节） */
       if (!isInvincible(s)) {
@@ -536,8 +537,8 @@
     var n = s.segments.length;
     if (n < 2) return;
     var tail = s.segments[n - 1], before = s.segments[n - 2];
-    var nx = tail.x + (tail.x - before.x), ny = tail.y + (tail.y - before.y);
-    if (nx < 0 || ny < 0 || nx >= W || ny >= H) { nx = tail.x; ny = tail.y; }
+    var nx = (tail.x + (tail.x - before.x) + W) % W;
+    var ny = (tail.y + (tail.y - before.y) + H) % H;
     s.segments.push({ x: nx, y: ny });
   }
 
@@ -708,11 +709,22 @@
    * 渲染
    * ============================================================ */
   function lerp(a, b, t) { return a + (b - a) * t; }
-  function cellOf(prev, i, t, target) {
-    var cur = target[i] || target[target.length - 1];
-    if (!cur) return null;
-    var before = prev[i] || cur;
-    return { x: lerp(before.x, cur.x, t), y: lerp(before.y, cur.y, t) };
+  /* 循环边界下的插值：跨缝时把上一格换算到相邻副本，并在接缝另一侧补画一份，
+     这样蛇从右边出去的同时会有一半从左边进来，不会横穿整块棋盘。 */
+  function wrapPoints(prev, cur, t) {
+    var x0 = prev ? prev.x : cur.x, y0 = prev ? prev.y : cur.y;
+    var dx = cur.x - x0, dy = cur.y - y0;
+    if (dx > W / 2) x0 += W; else if (dx < -W / 2) x0 -= W;
+    if (dy > H / 2) y0 += H; else if (dy < -H / 2) y0 -= H;
+    var x = lerp(x0, cur.x, t), y = lerp(y0, cur.y, t);
+    var oxs = [0], oys = [0];
+    if (x < 0) oxs.push(W); else if (x > W - 1) oxs.push(-W);
+    if (y < 0) oys.push(H); else if (y > H - 1) oys.push(-H);
+    var out = [];
+    for (var a = 0; a < oxs.length; a++) {
+      for (var b = 0; b < oys.length; b++) out.push({ x: x + oxs[a], y: y + oys[b] });
+    }
+    return out;
   }
 
   /* —— 牌面：矢量画法，数字牌完全不依赖字体 ——
@@ -831,36 +843,40 @@
     var alphaNow = ghost ? 0.42 : blink;
     if (winner) alphaNow = 0.75 + 0.25 * Math.abs(Math.sin(game.now / 130));
     for (var i = s.segments.length - 1; i >= 0; i--) {
-      var pos = cellOf(s.prev, i, alpha, s.segments);
-      if (!pos) continue;
-      var px = ox + pos.x * cell, py = pos.y * cell;
+      var cur = s.segments[i];
+      if (!cur) continue;
       var head = i === 0;
       var pad = head ? cell * 0.03 : cell * 0.1;
       var size = cell - pad * 2;
-      var bx = px + pad, by = py + pad;
-      if (head) {
-        ctx.globalAlpha = alphaNow;
-        ctx.fillStyle = winner ? P.win : color;
-        ctx.fillRect(bx - 1, by - 1, size + 2, size + 2);
-      }
-      tileFace(s.hand[i] === undefined ? 0 : E.kindOf(s.hand[i]), bx, by, size, alphaNow);
-      ctx.globalAlpha = Math.max(0.6, alphaNow);
-      ctx.strokeStyle = winner ? P.win : color;
-      ctx.lineWidth = head ? Math.max(2, cell * 0.12) : Math.max(1.5, cell * 0.07);
-      ctx.strokeRect(bx + ctx.lineWidth / 2, by + ctx.lineWidth / 2, size - ctx.lineWidth, size - ctx.lineWidth);
-      if (invincible && cell >= 8) {
-        ctx.globalAlpha = 0.45 * blink;
-        ctx.strokeStyle = P.win;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(px + 1.5, py + 1.5, cell - 3, cell - 3);
-      }
-      ctx.globalAlpha = 1;
-      if (head && cell >= 20) {
-        ctx.font = '700 ' + Math.round(cell * 0.38) + 'px ' + P.font;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        ctx.fillStyle = color;
-        ctx.fillText(s.def.tag, px + cell / 2, py - 1);
+      var kind = s.hand[i] === undefined ? 0 : E.kindOf(s.hand[i]);
+      var points = wrapPoints(s.prev[i], cur, alpha);
+      for (var k = 0; k < points.length; k++) {
+        var px = ox + points[k].x * cell, py = points[k].y * cell;
+        var bx = px + pad, by = py + pad;
+        if (head) {
+          ctx.globalAlpha = alphaNow;
+          ctx.fillStyle = winner ? P.win : color;
+          ctx.fillRect(bx - 1, by - 1, size + 2, size + 2);
+        }
+        tileFace(kind, bx, by, size, alphaNow);
+        ctx.globalAlpha = Math.max(0.6, alphaNow);
+        ctx.strokeStyle = winner ? P.win : color;
+        ctx.lineWidth = head ? Math.max(2, cell * 0.12) : Math.max(1.5, cell * 0.07);
+        ctx.strokeRect(bx + ctx.lineWidth / 2, by + ctx.lineWidth / 2, size - ctx.lineWidth, size - ctx.lineWidth);
+        if (invincible && cell >= 8) {
+          ctx.globalAlpha = 0.45 * blink;
+          ctx.strokeStyle = P.win;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(px + 1.5, py + 1.5, cell - 3, cell - 3);
+        }
+        ctx.globalAlpha = 1;
+        if (head && k === 0 && cell >= 20) {
+          ctx.font = '700 ' + Math.round(cell * 0.38) + 'px ' + P.font;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillStyle = color;
+          ctx.fillText(s.def.tag, px + cell / 2, py - 1);
+        }
       }
     }
   }
@@ -1219,13 +1235,14 @@
   function showStart() {
     var best = G.load().data.best;
     var lines = settings.seen
-      ? ['吃牌凑成四组牌加一对牌就赢。撞墙、撞自己、撞到别的蛇都会重生并换一副手牌。',
+      ? ['吃牌凑成四组牌加一对牌就赢。地图上下左右是循环的，撞自己或撞到别的蛇会重生换一副手牌。',
         '场上常驻四张麻将。吃满十四张后选一张打掉：每次思考 12 银秒，不够用再扣每局共用的 30 金秒。']
       : ['MOVE｜方向键 / WASD 转向，也可以在地图上滑动',
         'EAT A TILE｜蛇头碰到麻将就吃进来',
         'DISCARD ONE｜吃满十四张，点一张打掉（每次 12 银秒 + 每局 30 金秒）',
         'MAKE A HAND｜四组牌加一对牌就能胡',
-        'CRASH = NEW HAND｜碰撞会重生并换一副手牌'];
+        'WRAP AROUND｜走出边界会从对边回来',
+        'CRASH = NEW HAND｜撞到自己或别的蛇会重生并换一副手牌'];
     lines.push('当前难度：' + (DIFF_LABEL[settings.difficulty] || '普通'));
     lines.push(best && best.wins ? '已胡牌 ' + best.wins + ' 局' : '还没有胡过牌');
     M.overlay(stage, {

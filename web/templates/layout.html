@@ -16,10 +16,18 @@
 (function () {
   try {
     var d = JSON.parse(localStorage.getItem('homepage:e1:app:appearance') || 'null');
-    var saved = d && d.d && d.d.theme;
+    var data = (d && d.d) || {};
+    var saved = data.theme;
     var t = (saved === 'dark' || saved === 'light') ? saved
       : ((window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light');
     document.documentElement.dataset.theme = t;
+    // 自定义壁纸提前顶替默认油画，避免内页先闪一下默认底纹。
+    var img = t === 'dark' ? data.heroImageDark : data.heroImage;
+    if (img) {
+      document.documentElement.style.setProperty('--oil-painting', 'url("' + img + '")');
+      document.documentElement.style.setProperty('--oil-texture', 'url("' + img + '")');
+      document.documentElement.classList.add('has-custom-wallpaper');
+    }
   } catch (e) { /* 无存储时跟随亮色 */ }
 })();
 </script>
@@ -35,9 +43,14 @@
 <header class="site-header">
   {{if ne .Title "主页"}}<a class="brand home-wordmark" href="/">主页</a>{{end}}
   <div class="header-actions">{{if ne .Title "主页"}}<nav class="site-nav" aria-label="主导航"><a href="/about" {{if eq .Title "关于"}}aria-current="page"{{end}}>关于</a></nav>{{end}}
-  {{if eq .Title "主页"}}<button id="bg-upload" class="hero-btn" type="button" aria-label="更换背景图" title="更换背景图">
-    <span class="ti" style="--icon:url(/static/vendor/bootstrap-icons/images.svg?v={{.Ver}})" aria-hidden="true"></span>
-  </button>{{end}}
+  {{if eq .Title "主页"}}<div class="hero-actions" id="hero-actions">
+    <button id="bg-reset" class="hero-btn hero-reset" type="button" aria-label="恢复默认背景图" title="恢复默认背景图">
+      <span class="ti" style="--icon:url(/static/vendor/bootstrap-icons/arrow-counterclockwise.svg?v={{.Ver}})" aria-hidden="true"></span>
+    </button>
+    <button id="bg-upload" class="hero-btn" type="button" aria-label="更换背景图" title="更换背景图">
+      <span class="ti" style="--icon:url(/static/vendor/bootstrap-icons/images.svg?v={{.Ver}})" aria-hidden="true"></span>
+    </button>
+  </div>{{end}}
   <button id="theme-toggle" class="theme-toggle" type="button" aria-label="亮暗模式" aria-pressed="false" title="切换亮暗模式">
     <span class="ti ti-moon" style="--icon:url(/static/vendor/bootstrap-icons/moon-stars.svg?v={{.Ver}})" aria-hidden="true"></span>
     <span class="ti ti-sun" style="--icon:url(/static/vendor/bootstrap-icons/sun.svg?v={{.Ver}})" aria-hidden="true"></span>

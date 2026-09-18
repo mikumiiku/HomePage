@@ -50,29 +50,90 @@ with sync_playwright() as p:
     assert theme == "dark" and theme_after == "dark", "暗色模式未持久化"
     page.click("#theme-toggle")  # 回到亮色
 
-    # 换背景：上传 → 框选 → 保存 → 恢复默认
+    # 换背景：上传 → 框选 → 保存 → 悬停重置；亮暗两套壁纸互不影响，且全站生效
     png = page.evaluate("() => { const c = document.createElement('canvas'); c.width = 900; c.height = 600; const x = c.getContext('2d'); x.fillStyle = '#8fb5d5'; x.fillRect(0, 0, 900, 600); x.fillStyle = '#d98aa9'; x.beginPath(); x.arc(450, 300, 160, 0, 7); x.fill(); x.fillStyle = '#9cbfa8'; x.fillRect(60, 420, 240, 90); return c.toDataURL('image/png'); }")
     import base64
     fixture = f"{OUT}/fixture.png"
     open(fixture, "wb").write(base64.b64decode(png.split(",", 1)[1]))
-    with page.expect_file_chooser() as fc_info:
-        page.click("#bg-upload")
-    fc_info.value.set_files(fixture)
-    page.wait_for_selector(".crop-modal", timeout=5000)
-    page.wait_for_timeout(700)
-    page.click('.crop-actions [data-act="save"]')
+
+    def wallpaper():
+        # 自定义壁纸写成 <html> 上的行内变量，全站同一张；无自定义时回落到默认油画
+        return page.evaluate("() => ({ custom: document.documentElement.classList.contains('has-custom-wallpaper'),"
+                             " texture: getComputedStyle(document.documentElement).getPropertyValue('--oil-texture').trim(),"
+                             " body: getComputedStyle(document.body, '::before').backgroundImage })")
+
+    def can_reset():
+        return page.evaluate("() => document.getElementById('hero-actions').classList.contains('can-reset')")
+
+    def appearance():
+        return page.evaluate("() => JSON.parse(localStorage['homepage:e1:app:appearance']).d")
+
+    def upload():
+        with page.expect_file_chooser() as fc:
+            page.click("#bg-upload")
+        fc.value.set_files(fixture)
+        page.wait_for_selector(".crop-modal", timeout=5000)
+        page.wait_for_timeout(700)
+        page.click('.crop-actions [data-act="save"]')
+        page.wait_for_timeout(400)
+
+    def switch_theme():
+        page.click("#theme-toggle")
+        page.wait_for_timeout(500)
+
+    def inner_texture(url):
+        page.goto(f"{BASE}{url}", wait_until="domcontentloaded")
+        page.wait_for_timeout(400)
+        return wallpaper()["texture"]
+
+    # 默认没有自定义壁纸：悬停也不该滑出重置按钮
+    assert can_reset() is False, "默认状态不该有重置按钮"
+    assert "monet-meadow" in wallpaper()["texture"], "亮色默认底纹应为草地油画"
+
+    upload()  # 亮色上传
+    saved = appearance()
+    w = wallpaper()
+    print("light texture:", w["texture"][:34], "| saved bytes:", len(saved.get("heroImage") or ""))
+    assert w["custom"] and w["texture"].startswith('url("data:image') and w["body"].startswith('url("data:image'), "背景未全站生效!"
+    assert saved["heroImage"].startswith("data:image/jpeg"), "亮色壁纸未写入存档"
+    assert saved.get("heroImageDark") is None, "亮色上传不应写入暗色壁纸"
+    assert inner_texture("/games/").startswith('url("data:image'), "自定义壁纸未铺到内页"
+    page.goto(BASE, wait_until="domcontentloaded")
     page.wait_for_timeout(400)
-    hero_bg = page.evaluate("() => document.getElementById('hero').style.backgroundImage")
-    saved = page.evaluate("() => JSON.parse(localStorage['homepage:e1:app:appearance']).d.heroImage || ''")
-    print("hero bg applied:", hero_bg[:34], "| saved bytes:", len(saved))
-    assert hero_bg.startswith('url("data:image') and saved.startswith("data:image/jpeg"), "背景未生效!"
-    with page.expect_file_chooser() as fc_info2:
-        page.click("#bg-upload")
-    fc_info2.value.set_files(fixture)
-    page.wait_for_selector(".crop-modal", timeout=5000)
-    page.click('[data-act="reset"]')
+
+    switch_theme()  # → 暗色：仍是默认《睡莲》，两个主题不共用
+    assert wallpaper()["custom"] is False and can_reset() is False, "暗色不该显示亮色壁纸"
+    assert "monet-waterlilies" in inner_texture("/about"), "暗色内页底纹应为默认睡莲"
+    page.goto(BASE, wait_until="domcontentloaded")
+    page.wait_for_timeout(400)
+    switch_theme()  # → 亮色：亮色壁纸还在
+    assert wallpaper()["custom"] is True, "切回亮色后壁纸丢失"
+
+    page.hover("#bg-upload")  # 悬停滑出重置按钮
+    page.wait_for_timeout(400)
+    assert page.is_visible("#bg-reset"), "悬停未滑出重置按钮"
+    page.click("#bg-reset")
     page.wait_for_timeout(300)
-    assert page.evaluate("() => document.getElementById('hero').style.backgroundImage") == "", "恢复默认失败"
+    assert wallpaper()["custom"] is False and appearance().get("heroImage") is None, "重置未清空当前主题壁纸"
+    print("light wallpaper flow ok")
+
+    switch_theme()  # → 暗色上传：只写暗色槽位
+    upload()
+    saved = appearance()
+    assert (saved.get("heroImageDark") or "").startswith("data:image/jpeg") and saved.get("heroImage") is None, "暗色壁纸应独立保存"
+    switch_theme()  # → 亮色仍是默认油画
+    assert wallpaper()["custom"] is False, "暗色上传影响了亮色"
+    page.hover("#bg-upload")  # 亮色没有自定义壁纸：悬停也不滑出
+    page.wait_for_timeout(400)
+    assert page.is_visible("#bg-reset") is False, "无自定义壁纸时不该出现重置按钮"
+    switch_theme()  # → 暗色：悬停滑出并重置，收尾回到默认
+    page.hover("#bg-upload")
+    page.wait_for_timeout(400)
+    assert page.is_visible("#bg-reset"), "暗色壁纸下悬停未滑出重置按钮"
+    page.click("#bg-reset")
+    page.wait_for_timeout(300)
+    assert wallpaper()["custom"] is False and appearance().get("heroImageDark") is None, "暗色重置失败"
+    switch_theme()  # → 亮色，与初始状态一致
     print("upload flow ok")
 
     page.goto(f"{BASE}/games/", wait_until="domcontentloaded")

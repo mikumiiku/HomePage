@@ -94,6 +94,21 @@ test('抢牌型愿意为双方都要的牌加价', () => {
   assert(deny > eff, '干扰型也加分');
 });
 
+test('路径与预判在循环边界上计算', () => {
+  const grid = { blocked: new Uint8Array(20 * 12), risk: new Uint8Array(20 * 12) };
+  const path = AI.bfs(grid, 20, 12, 0, 5);
+  assert.equal(path.dist[5 * 20 + 19], 1, '从左边出去应该一步到右边');
+  assert.equal(path.area, 20 * 12, '空场上整块地图都可达');
+  /* 蛇头在最右边向右走，目标在左边：穿过边界才是最近的路。 */
+  const v = view({
+    self: { head: { x: 19, y: 5 }, dir: { x: 1, y: 0 }, body: body([[19, 5], [18, 5]]), hand: hand('123m 456m 789m 12p 77s') },
+    tiles: [{ x: 2, y: 5, kind: E.kindOfTile('p', 3) }]
+  });
+  const move = AI.chooseMove(v);
+  assert(move);
+  assert.deepEqual(move.dir, { x: 1, y: 0, name: 'right' }, '绕边界比绕回去更近');
+});
+
 test('弃牌选择返回合法下标', () => {
   const fourteen = hand('123m 456m 789m 12p 77s 1z');
   const index = AI.chooseDiscard(fourteen, new Int8Array(E.KINDS), AI.PERSONALITIES.cpu1);

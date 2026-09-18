@@ -199,6 +199,38 @@ with sync_playwright() as p:
     assert spectate, '没能验证查看电脑手牌'
     results.append(dict(case='spectate', detail=spectate))
 
+    # 循环边界：一直朝右走，蛇头应当从最右边跳回最左边，而且不算死亡
+    wrapped = None
+    for attempt in range(4):
+        page.wait_for_function("App.squek.state().snakes[0].state === 'NORMAL'", timeout=20000)
+        prev = None
+        prev_deaths = None
+        for _ in range(600):
+            st = page.evaluate('App.squek.state()')
+            if st['phase'] != 'PLAYING':
+                break
+            me = st['snakes'][0]
+            if me['state'] != 'NORMAL' or not me['head']:
+                prev = None
+                page.evaluate("App.squek.steer('right')")
+                page.wait_for_timeout(120)
+                continue
+            x = me['head']['x']
+            if prev is not None and x - prev <= -10:
+                # 跨缝这一步必须仍然是活着的正常状态，且死亡计数没有增加
+                assert me['deaths'] == prev_deaths, ('绕边界不该算死亡', prev, x, me['deaths'], prev_deaths)
+                wrapped = dict(from_x=prev, to_x=x, deaths=me['deaths'], state=me['state'])
+                break
+            prev = x
+            prev_deaths = me['deaths']
+            page.evaluate("App.squek.steer('right')")
+            page.wait_for_timeout(120)
+        if wrapped:
+            break
+    assert wrapped, '没有观察到蛇头从边缘绕回'
+    assert wrapped['state'] == 'NORMAL', wrapped
+    results.append(dict(case='wrap-around', detail=wrapped))
+
     # 暂停：Esc 停住一切，继续后仍能操作（中途可能有电脑先胡牌，重开再试）
     paused = False
     for _ in range(4):
