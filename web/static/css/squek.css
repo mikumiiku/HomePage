@@ -1,0 +1,118 @@
+/* ============================================================
+   雀蛇 · 新粗野主义界面
+   粗黑描边、硬阴影、高饱和色块、几乎不用圆角、明显按压反馈。
+   颜色全部来自 home.css 的 --sq-* token（亮暗两套）。
+   ============================================================ */
+
+.is-game .unified-stage[data-game="squek"] { flex: 0 0 auto; margin-block: auto; }
+.sq-wrap { display: flex; flex-direction: column; gap: 8px; width: 100%; min-width: 0; }
+
+/* —— 四家状态牌 —— */
+.sq-plates { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.sq-plate {
+  display: flex; flex-direction: column; gap: 1px; align-items: flex-start;
+  min-width: 0; padding: 4px 8px; cursor: pointer;
+  border: 2px solid var(--sq-edge); border-left: 8px solid var(--sq-plate);
+  border-radius: 0; background: var(--card); color: var(--ink);
+  box-shadow: 3px 3px 0 var(--sq-shadow);
+  font: 500 12px/1.35 var(--font-body); text-align: left;
+  transition: transform .08s, box-shadow .08s;
+}
+.sq-plate:hover { background: color-mix(in srgb, var(--sq-plate) 14%, var(--card)); }
+.sq-plate:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--sq-shadow); }
+.sq-plate.is-active { box-shadow: 3px 3px 0 var(--sq-shadow), inset 0 -4px 0 var(--sq-plate); }
+.sq-plate-name { font-weight: 700; letter-spacing: .02em; }
+.sq-plate-state { color: var(--ink-soft); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+/* —— 棋盘 ——
+   选择器带 .canvas-frame 是为了压过 games.css 里同名的内边距与内阴影。 */
+.canvas-frame.sq-frame {
+  position: relative; padding: 0; background: var(--sq-bg);
+  border: 3px solid var(--sq-edge); border-radius: 0;
+  box-shadow: 6px 6px 0 var(--sq-shadow);
+  margin-inline: auto;
+}
+.canvas-frame.sq-frame canvas { display: block; margin-inline: auto; touch-action: none; image-rendering: auto; }
+
+/* —— 中央横幅：倒计时 / DRAW / CRASH / 胡 —— */
+.sq-msg {
+  position: absolute; inset: 0; margin: 0; display: grid; place-items: center;
+  pointer-events: none; opacity: 0; transition: opacity .1s;
+  font: 800 clamp(28px, 6vw, 64px)/1 var(--font-display); letter-spacing: .04em;
+  color: var(--sq-player); text-shadow: 3px 3px 0 var(--sq-shadow);
+  -webkit-text-stroke: 1px var(--sq-shadow);
+}
+.sq-msg.is-on { opacity: 1; }
+.sq-msg.is-hu {
+  font-size: clamp(72px, 22vw, 220px); color: var(--sq-win);
+  -webkit-text-stroke: 3px var(--sq-shadow);
+  animation: sq-hu .45s cubic-bezier(.2, 1.6, .3, 1) both;
+}
+@keyframes sq-hu {
+  from { transform: scale(.4) rotate(-6deg); opacity: 0; }
+  to { transform: scale(1) rotate(0); opacity: 1; }
+}
+.sq-msg.is-crash { color: var(--sq-cpu2); }
+
+/* —— 手牌条 —— */
+.sq-bar {
+  position: relative; padding: 6px 8px 8px;
+  border: 3px solid var(--sq-edge); border-radius: 0;
+  background: var(--card); box-shadow: 5px 5px 0 var(--sq-shadow);
+  overflow: hidden;
+}
+.sq-bar::after {
+  content: ""; position: absolute; left: 0; bottom: 0; height: 5px;
+  width: var(--sq-left, 0%); background: var(--sq-player);
+  transition: width .12s linear;
+}
+.sq-bar.is-acting { border-color: var(--sq-player); }
+.sq-bar-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.sq-bar-label { color: var(--ink-soft); font-size: 12px; }
+.sq-bar-timer { color: var(--sq-player); font: 700 14px/1 var(--font-figure); font-variant-numeric: tabular-nums; }
+.sq-tiles { display: flex; flex-wrap: wrap; gap: 4px; padding-bottom: 2px; }
+.sq-bar-empty { color: var(--ink-soft); font-size: 12px; }
+
+.sq-tile {
+  flex: 0 0 auto; width: 34px; height: 46px; padding: 0; cursor: pointer;
+  border: 2px solid var(--sq-edge); border-top: 7px solid var(--sq-tile);
+  border-radius: 0; background: var(--sq-face); color: var(--sq-tile);
+  box-shadow: 2px 2px 0 var(--sq-shadow);
+  font: 700 13px/1 var(--font-body);
+  display: grid; place-items: center;
+  transition: transform .08s, box-shadow .08s;
+}
+.sq-tile-label { transform: translateY(2px); }
+.sq-tile:hover { background: color-mix(in srgb, var(--sq-tile) 12%, var(--sq-face)); }
+.sq-tile:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--sq-shadow); }
+.sq-tile.is-static { cursor: default; opacity: .78; box-shadow: none; }
+.sq-tile.is-static:hover { background: var(--sq-face); }
+
+/* —— 设置面板里的雀蛇选项 —— */
+.sq-settings { display: flex; flex-direction: column; gap: 12px; }
+.sq-settings .sq-field { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; }
+.sq-settings select { min-width: 120px; }
+.sq-settings .sq-check { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; }
+
+/* —— HUD 补充项 —— */
+.sq-stat { margin-left: 10px; }
+.sq-stat b { font-variant-numeric: tabular-nums; }
+
+/* 窄屏与横屏：状态牌只留名字与状态，手牌矮一点，保证棋盘占满剩余高度。 */
+/* 矮屏（手机横屏）不给手牌换行，改成一行横向滚动，保住棋盘高度。 */
+@media (max-height: 560px) {
+  .sq-tiles { flex-wrap: nowrap; overflow-x: auto; }
+  .sq-tile { width: 26px; height: 34px; font-size: 11px; border-top-width: 5px; }
+  .sq-plate { padding: 2px 6px; font-size: 11px; }
+  .sq-bar-head { margin-bottom: 4px; }
+}
+@media (max-width: 560px) {
+  .sq-plates { gap: 4px; }
+  .sq-plate { border-left-width: 6px; padding: 3px 5px; }
+  .sq-plate-name { font-size: 11px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sq-msg, .sq-msg.is-hu { animation: none; transition: none; }
+  .sq-plate, .sq-tile { transition: none; }
+}

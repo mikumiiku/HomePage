@@ -167,7 +167,10 @@
           stage.style.width = (boardWidth + 16) + 'px';
           stage.querySelector('.tetris-wrap > .canvas-frame canvas').style.setProperty('width', boardWidth + 'px');
           stage.querySelector('.tetris-wrap > .canvas-frame canvas').style.setProperty('height', boardWidth * 2 + 'px');
-        } else {
+        } else if (game === 'squek') {
+        // 雀蛇：棋盘宽高比固定，格子尺寸由 squek.js 按剩余视口换算，这里只给满宽度。
+        stage.style.width = Math.max(80, width) + 'px';
+      } else {
           var extra = stage.querySelector('.swipe-meta');
           var size = Math.floor(Math.min(width, available - (extra ? extra.offsetHeight + 14 : 0)));
           stage.style.width = Math.max(80, size) + 'px';

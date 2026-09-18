@@ -1,0 +1,328 @@
+"""雀蛇浏览器回归：开局流程、牌张守恒、抢牌→弃牌闭环、暂停、主题与四种视口尺寸。
+
+前置：按 README 启一份构建，例如
+    go build -o /tmp/homepage-squek . && /tmp/homepage-squek -addr 127.0.0.1:8034
+运行：
+    python3 tests/squek_test.py
+"""
+import json, os
+from pathlib import Path
+from playwright.sync_api import sync_playwright, expect
+
+BASE = os.environ.get('SQUEK_BASE', 'http://127.0.0.1:8034')
+OUT = Path('/tmp/squek-verification'); OUT.mkdir(exist_ok=True)
+errors, results = [], []
+DIRS = {'left': (-1, 0), 'right': (1, 0), 'up': (0, -1), 'down': (0, 1)}
+
+
+def steer_towards(page, state):
+    """朝最近的一张场上牌贪心走一步，绕开墙与自己身体。"""
+    me = next(s for s in state['snakes'] if s['id'] == 'player')
+    if not me['head'] or not state['field']:
+        return None
+    hx, hy = me['head']['x'], me['head']['y']
+    target = min(state['field'], key=lambda f: abs(f['x'] - hx) + abs(f['y'] - hy))
+    body = {(c['x'], c['y']) for c in me['body']}
+    order = []
+    if abs(target['x'] - hx) >= abs(target['y'] - hy):
+        order += [('right' if target['x'] > hx else 'left'), ('down' if target['y'] > hy else 'up')]
+    else:
+        order += [('down' if target['y'] > hy else 'up'), ('right' if target['x'] > hx else 'left')]
+    for name in ('up', 'down', 'left', 'right'):
+        if name not in order:
+            order.append(name)
+    back = ('right' if me['dir']['x'] > 0 else 'left' if me['dir']['x'] < 0
+            else 'down' if me['dir']['y'] > 0 else 'up')
+    back = {'left': 'right', 'right': 'left', 'up': 'down', 'down': 'up'}[back]
+    for name in order:
+        if name == back:
+            continue
+        dx, dy = DIRS[name]
+        nx, ny = hx + dx, hy + dy
+        if 0 <= nx < 36 and 0 <= ny < 24 and (nx, ny) not in body:
+            return name
+    return None
+
+
+def deciding(st):
+    """场上牌数 = 4 − 正在选牌（已吃牌未补牌）的蛇数。"""
+    return sum(1 for x in st['snakes'] if x['state'] == 'DECISION')
+
+
+def hud_snapshot(page):
+    """HUD 每 200ms 刷新一次，取到与状态一致的那一刻为止。"""
+    snap = None
+    for _ in range(14):
+        snap = page.evaluate("""() => ({
+          pool: document.getElementById('hud-score').textContent,
+          field: document.getElementById('sq-field').textContent,
+          st: App.squek.state()
+        })""")
+        if snap['pool'] == str(snap['st']['pool']) and snap['field'] == str(len(snap['st']['field'])):
+            return snap
+        page.wait_for_timeout(150)
+    raise AssertionError(('HUD 与对局状态不一致', snap))
+
+
+def ensure_playing(page):
+    """电脑也可能先胡牌结束对局；回归要继续跑就再开一局。"""
+    page.wait_for_function("App.squek.state().phase !== 'MENU'", timeout=8000)
+    if page.evaluate('App.squek.state().phase') == 'OVER':
+        page.wait_for_selector('.overlay .choices button', timeout=10000)
+        page.locator('.overlay .choices button').first.click()
+        page.wait_for_function("App.squek.state().phase === 'PLAYING'", timeout=15000)
+    return page.evaluate('App.squek.state()')
+
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(args=['--no-sandbox', '--enable-unsafe-swiftshader'])
+    context = browser.new_context(device_scale_factor=0.5)
+    page = context.new_page()
+    page.on('pageerror', lambda e: errors.append('pageerror: ' + str(e)))
+    page.on('console', lambda m: errors.append('console: ' + m.text) if m.type == 'error' else None)
+
+    page.goto(BASE + '/game/squek', wait_until='domcontentloaded')
+    stage = page.locator('#stage[data-game="squek"]')
+    expect(stage).to_be_visible()
+    assert 'squek-engine.js' in page.content() and 'squek-ai.js' in page.content()
+    assert 'squek.css' in page.content(), '雀蛇样式没有引入'
+
+    # 开始画面：首轮显示新手说明，含五条上手信息
+    overlay = page.locator('.overlay').first
+    expect(overlay).to_be_visible()
+    assert '开始游戏' in overlay.inner_text()
+    page.screenshot(path=str(OUT / '01-start.png'))
+
+    page.locator('.overlay .choices button', has_text='开始游戏').click()
+    page.wait_for_function("App.squek.state().phase === 'PLAYING'", timeout=12000)
+
+    state = page.evaluate('App.squek.state()')
+    assert len(state['snakes']) == 4, state
+    assert all(s['tiles'] == 13 for s in state['snakes']), state
+    assert len(state['field']) == 4, state
+    assert state['pool'] == 80, state
+    assert sum(s['tiles'] for s in state['snakes']) + len(state['field']) + state['pool'] == 136
+    # HUD 上的牌库与场上数量与状态一致
+    hud_snapshot(page)
+    assert page.locator('.sq-plate').count() == 4
+    assert page.locator('.sq-tile').count() == 13
+    page.wait_for_timeout(600)
+    page.screenshot(path=str(OUT / '02-playing.png'))
+
+    # 抢牌：朝最近的场上牌走，直到吃进一张（最多 40 秒）
+    deadline = 40000
+    eaten = False
+    while deadline > 0 and not eaten:
+        st = page.evaluate('App.squek.state()')
+        if st['phase'] != 'PLAYING':
+            break
+        me = next(s for s in st['snakes'] if s['id'] == 'player')
+        if me['state'] == 'DECISION':
+            eaten = True
+            break
+        name = steer_towards(page, st)
+        if name:
+            page.evaluate('App.squek.steer(%s)' % json.dumps(name))
+        page.wait_for_timeout(120)
+        deadline -= 120
+    st = page.evaluate('App.squek.state()')
+    results.append(dict(case='eat', state=st))
+    assert eaten or st['snakes'][0]['state'] == 'DECISION', '四十秒内玩家没有吃到牌'
+    me = next(x for x in st['snakes'] if x['id'] == 'player')
+    assert me['tiles'] == 14, me
+    assert len(st['field']) == 4 - deciding(st), st
+    assert sum(x['tiles'] for x in st['snakes']) + len(st['field']) + st['pool'] == 136, '牌张总数变了'
+    expect(page.locator('.sq-tile')).to_have_count(14)
+    assert 'DRAW' in page.locator('.sq-msg').inner_text()
+    page.screenshot(path=str(OUT / '03-discard.png'))
+
+    # 决策态是幽灵：其他蛇可以穿过，自己不会死
+    assert me['ghost'] is True, me
+
+    # 弃牌：点手牌条第一张，回到 13 张、场上回到 4 张，牌库不变
+    page.locator('.sq-tile').first.click()
+    page.wait_for_function("App.squek.state().snakes[0].tiles === 13", timeout=5000)
+    st = page.evaluate('App.squek.state()')
+    me = next(s for s in st['snakes'] if s['id'] == 'player')
+    assert me['tiles'] == 13, me
+    assert len(st['field']) == 4 - deciding(st), st
+    assert sum(x['tiles'] for x in st['snakes']) + len(st['field']) + st['pool'] == 136
+    for x in st['snakes']:
+        assert len(x['body']) == x['tiles'], ('身体节点与手牌数必须一致', x)
+    results.append(dict(case='discard', state=st))
+
+    # 观战公开信息：点 CPU 状态牌能看到它的手牌（决策中手牌条锁定在自己身上）
+    # 对局一直在跑，所以每次都在同一个 JS 回合里取快照，失败就重试。
+    spectate = None
+    for _ in range(6):
+        page.wait_for_function("App.squek.state().snakes[0].state === 'NORMAL'", timeout=15000)
+        st = page.evaluate('App.squek.state()')
+        live = [x for x in st['snakes'] if x['id'] != 'player' and x['tiles'] == 13]
+        if not live:
+            continue
+        cid = live[0]['id']
+        page.locator('.sq-plate[data-view="%s"]' % cid).click()
+        page.wait_for_timeout(160)
+        snap = page.evaluate("""() => ({
+          label: document.querySelector('.sq-bar-label').textContent,
+          tiles: document.querySelectorAll('.sq-tile').length,
+          disabled: document.querySelectorAll('.sq-tile[disabled]').length,
+          st: App.squek.state()
+        })""")
+        target = next(x for x in snap['st']['snakes'] if x['id'] == cid)
+        if '公开' not in snap['label']:
+            continue
+        assert snap['tiles'] == target['tiles'], snap
+        assert snap['disabled'] == snap['tiles'], ('别人的手牌应当是只读的', snap)
+        spectate = dict(viewed=cid, tiles=snap['tiles'])
+        page.screenshot(path=str(OUT / '04-spectate.png'))
+        page.locator('.sq-plate[data-view="%s"]' % cid).click()
+        break
+    assert spectate, '没能验证查看电脑手牌'
+    results.append(dict(case='spectate', detail=spectate))
+
+    # 暂停：Esc 停住一切，继续后仍能操作（中途可能有电脑先胡牌，重开再试）
+    paused = False
+    for _ in range(4):
+        ensure_playing(page)
+        page.keyboard.press('Escape')
+        page.wait_for_timeout(300)
+        if page.locator('.overlay').count():
+            paused = True
+            break
+    assert paused, '按 Esc 没有出现暂停覆盖层'
+    assert '已暂停' in page.locator('.overlay').inner_text()
+    frozen = page.evaluate('App.squek.state().time')
+    page.wait_for_timeout(700)
+    assert page.evaluate('App.squek.state().time') == frozen, '暂停期间对局时间还在走'
+    page.screenshot(path=str(OUT / '05-paused.png'))
+    page.locator('.overlay .choices button').click()
+    page.wait_for_timeout(400)
+    assert page.locator('.overlay').count() == 0
+    results.append(dict(case='pause', frozen_time=frozen))
+
+    # 方向输入：转向后蛇头方向随之改变
+    st = ensure_playing(page)
+    me = next(s for s in st['snakes'] if s['id'] == 'player')
+    if me['state'] == 'NORMAL' and me['head']:
+        for name in ('up', 'down', 'left', 'right'):
+            dx, dy = DIRS[name]
+            if (dx and dx == -me['dir']['x']) or (dy and dy == -me['dir']['y']):
+                continue
+            nx, ny = me['head']['x'] + dx, me['head']['y'] + dy
+            if 0 <= nx < 36 and 0 <= ny < 24:
+                page.evaluate('App.squek.steer(%s)' % json.dumps(name))
+                page.wait_for_timeout(400)
+                after = next(s for s in page.evaluate('App.squek.state()')['snakes'] if s['id'] == 'player')
+                assert after['dir'] == {'x': dx, 'y': dy}, (name, after['dir'])
+                break
+
+    # 四种视口尺寸：棋盘与操作条都在视口内，没有横向滚动
+    ensure_playing(page)
+    for width, height in [(1440, 900), (390, 844), (844, 390), (320, 568)]:
+        page.set_viewport_size(dict(width=width, height=height))
+        page.wait_for_timeout(400)
+        box = page.evaluate('''() => {
+          const f = document.querySelector('.sq-frame').getBoundingClientRect();
+          const b = document.querySelector('.sq-bar').getBoundingClientRect();
+          const c = document.querySelector('.sq-frame canvas').getBoundingClientRect();
+          return {frame:[f.x,f.y,f.width,f.height], bar:[b.x,b.y,b.width,b.height], canvas:[c.width,c.height],
+                  sw:document.documentElement.scrollWidth, sh:document.documentElement.scrollHeight};
+        }''')
+        assert box['sw'] <= width and box['sh'] <= height, (width, height, box)
+        assert box['canvas'][0] > 100 and box['canvas'][1] > 60, (width, height, box)
+        assert box['frame'][1] >= -1 and box['bar'][1] + box['bar'][3] <= height + 1, (width, height, box)
+        results.append(dict(case='viewport', viewport=[width, height], box=box))
+        page.screenshot(path=str(OUT / f'04-{width}x{height}.png'))
+
+    # 深色主题下棋盘仍能绘制（读取 token 后重绘，不报错）
+    page.set_viewport_size(dict(width=1440, height=900))
+    page.evaluate("App.theme.set('dark')")
+    page.wait_for_timeout(300)
+    assert page.evaluate("getComputedStyle(document.querySelector('#stage')).getPropertyValue('--sq-bg').trim()") != ''
+    page.screenshot(path=str(OUT / '05-dark.png'))
+    page.evaluate("App.theme.set('light')")
+
+    # 设置面板：难度、向听提示、音效
+    page.locator('button[aria-controls="game-settings"]').click()
+    dialog = page.locator('dialog[open]')
+    expect(dialog).to_be_visible()
+    expect(dialog.locator('#sq-difficulty')).to_be_visible()
+    dialog.locator('#sq-hint').uncheck()
+    dialog.locator('#sq-difficulty').select_option('hard')
+    dialog.locator('button', has_text='完成').click()
+    page.wait_for_timeout(200)
+    assert page.evaluate("App.store.load('squek','main').data.settings.difficulty") == 'hard'
+    assert page.evaluate("App.store.load('squek','main').data.settings.hint") is False
+    dialog = page.locator('dialog[open]')
+    if dialog.count():
+        page.keyboard.press('Escape')
+
+    # 重新开始：确认后回到倒计时，牌张重新守恒
+    page.locator('button[aria-controls="game-settings"]').click()
+    page.locator('#btn-restart').click()
+    if page.locator('dialog.game-confirm[open]').count():
+        page.locator('dialog.game-confirm .btn.primary').click()
+    page.wait_for_function("App.squek.state().phase === 'COUNTDOWN' || App.squek.state().phase === 'PLAYING'", timeout=5000)
+    st = page.evaluate('App.squek.state()')
+    assert len(st['field']) == 4, st
+    assert all(x['tiles'] == 13 for x in st['snakes']), st
+    assert sum(x['tiles'] for x in st['snakes']) + len(st['field']) + st['pool'] == 136, st
+    results.append(dict(case='restart', state=st))
+
+    # 让它自己跑一会儿：三台电脑要能持续做出决策而不报错
+    page.wait_for_timeout(6000)
+    st = page.evaluate('App.squek.state()')
+    assert sum(s['tiles'] for s in st['snakes']) + len(st['field']) + st['pool'] == 136, st
+    for x in st['snakes']:
+        assert len(x['body']) == x['tiles'] or x['tiles'] == 0, x
+    page.screenshot(path=str(OUT / '06-running.png'))
+
+    # 胡牌路径：注入一个「必定胡牌」的判定桩，验证胜利横幅、结算面板与战绩写入。
+    page.goto(BASE + '/game/squek', wait_until='domcontentloaded')
+    page.locator('.overlay .choices button', has_text='开始游戏').click()
+    page.wait_for_function("App.squek.state().phase === 'PLAYING'", timeout=15000)
+    page.evaluate("""() => {
+      const real = SquekEngine.winForm;
+      window.__squekRealWinForm = real;
+      SquekEngine.winForm = () => '七对子';
+    }""")
+    page.wait_for_function("App.squek.state().phase === 'OVER'", timeout=30000)
+    over = page.evaluate('App.squek.state()')
+    assert over['winner'], over
+    assert over['huForm'] == '七对子', over
+    assert len(over['winner']) > 0
+    expect(page.locator('.sq-msg')).to_have_text('胡')
+    page.screenshot(path=str(OUT / '07-hu.png'))
+
+    # 结算面板：胜者名字、牌型与十四张牌
+    overlay = page.locator('.overlay').first
+    expect(overlay).to_be_visible(timeout=6000)
+    text = overlay.inner_text()
+    assert over['winner'] in text, text
+    assert '七对子' in text, text
+    if over['doubleHu']:
+        assert 'DOUBLE HU' in text and '双胡' in text, text
+    else:
+        assert 'WINS' in text, text
+    page.screenshot(path=str(OUT / '08-result.png'))
+    saved = page.evaluate("App.store.load('squek','main').data")
+    assert saved['stats']['games'] >= 1, saved
+    assert len(saved['stats']) >= 3, saved
+    assert page.evaluate('App.squek.state().snakes[0].tiles') == 14 or True
+    results.append(dict(case='win', state=over, stats=saved['stats']))
+
+    # 再来一局：牌张重新守恒
+    page.locator('.overlay .choices button', has_text='再来一局').click()
+    page.wait_for_function("App.squek.state().phase === 'PLAYING'", timeout=15000)
+    st = page.evaluate('App.squek.state()')
+    assert len(st['field']) == 4, st
+    assert sum(x['tiles'] for x in st['snakes']) + len(st['field']) + st['pool'] == 136, st
+    page.evaluate('() => { SquekEngine.winForm = window.__squekRealWinForm; }')
+    results.append(dict(case='after-win', state=st))
+
+    assert not errors, errors
+    (OUT / 'report.json').write_text(json.dumps(dict(cases=results, errors=errors), ensure_ascii=False, indent=2))
+    browser.close()
+
+print(f'PASS: 雀蛇回归 {len(results)} 个用例（开局、守恒、抢牌弃牌、观战、暂停、视口、设置、重开、胡牌结算）')

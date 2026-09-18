@@ -118,6 +118,13 @@ var gamesOrder = []Game{
 		HintMobile:  "在棋盘上向任意方向滑动转向，越吃越快。",
 	},
 	{
+		ID: "squek", Title: "雀蛇", Icon: "domino-tiles", Accent: "#a8523f",
+		Tagline:     "四条蛇在场上抢麻将，先凑成胡牌的一方获胜。",
+		Platforms:   []string{PlatformDesktop, PlatformMobile},
+		HintDesktop: "方向键 / WASD 转向，吃到牌后在 5 秒内点手牌打出一张；Esc 暂停。",
+		HintMobile:  "在地图上滑动转向，吃到牌后轻触手牌打出一张。",
+	},
+	{
 		ID: "memory", Title: "记忆翻牌", Icon: "card-pick", Accent: "#d98aa9",
 		Tagline:     "翻牌找出所有成对的花。",
 		Platforms:   []string{PlatformDesktop, PlatformMobile},

@@ -83,6 +83,14 @@
   --fps-danger: #db7258; --fps-map: #24373bdd;
   --fps-fog: #53666b; --fps-sky-high: #72a9bc; --fps-foliage: #68774c; --fps-clay: #ab7757;
   --fps-vision: #cad8b0; --fps-alert: #e9ba62; --fps-hud-shadow: #101d22b8; --fps-hud-muted: #dddcc6;
+  /* 雀蛇（新粗野主义）：粗黑描边 + 硬阴影 + 四家固定色。
+     牌面在两套主题下都保持象牙白，因此牌面字色统一用较深的 --sq-m/p/s/z，不随主题反转。 */
+  --sq-bg: #f4f1e8; --sq-grid: #dcd6c4; --sq-line: #14110c;
+  --sq-edge: #14110c; --sq-shadow: #14110c;
+  --sq-face: #fdfbf4;
+  --sq-m: #a83226; --sq-p: #1d4e79; --sq-s: #2c6636; --sq-z: #6b2f52;
+  --sq-player: #c9381f; --sq-cpu1: #2a67ad; --sq-cpu2: #a8720a; --sq-cpu3: #2f7a3f;
+  --sq-win: #a8720a;
 
   /* —— 字体 ——
      拉丁与数字走自托管 EB Garamond，中文回落到系统宋体（标题）或系统无衬线（正文）。
@@ -161,6 +169,12 @@ html[data-theme="dark"] {
   --fps-danger: #ef927b; --fps-map: #14252ce8;
   --fps-fog: #101d29; --fps-sky-high: #142f4d; --fps-foliage: #6c8475; --fps-clay: #9b8274;
   --fps-vision: #adcdb5; --fps-alert: #f2c774; --fps-hud-shadow: #09151bd9; --fps-hud-muted: #d0ded9;
+  --sq-bg: #26241f; --sq-grid: #3a3730; --sq-line: #0a090c;
+  --sq-edge: #6a6353; --sq-shadow: #05060a;
+  --sq-face: #e6dfcd;
+  --sq-m: #b8342a; --sq-p: #27639b; --sq-s: #327243; --sq-z: #7a3a5c;
+  --sq-player: #ff6b4f; --sq-cpu1: #5aa6f0; --sq-cpu2: #f2c445; --sq-cpu3: #63c877;
+  --sq-win: #f0c25a;
   --chat-wall: var(--wall); --chat-panel: var(--card); --chat-rule: var(--rule);
 }
 

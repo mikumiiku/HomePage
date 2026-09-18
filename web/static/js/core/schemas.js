@@ -68,6 +68,18 @@
     bestText: function (b) { return b && b.score > 0 ? b.score + ' 分' : null; },
   });
 
+  D('squek', 'main', {
+    version: 1,
+    defaults: function () {
+      return {
+        best: { wins: 0, fastest: 0 },
+        stats: { games: 0, wins: 0, doubleHu: 0, crashes: 0 },
+        settings: { difficulty: 'normal', hint: true, sound: true, seen: false },
+      };
+    },
+    bestText: function (b) { return b && b.wins > 0 ? '胡牌 ' + b.wins + ' 局' : null; },
+  });
+
   D('memory', 'main', {
     version: 1,
     defaults: function () {

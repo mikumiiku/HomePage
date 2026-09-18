@@ -92,6 +92,7 @@ v2 代码读 v1 存档靠 defaults 补齐；v1 代码（理论上）遇到 v2 �
 | go | `main` | `{streak}` | `{buckets}` | `{mode,size,level,color,confirm,numbers}` | `{id,settings,human,moves,phase,dead,confirmations,result,settled}` |
 | 2048 | `main` | `{score, maxTile}` | `{games, totalMoves}` | `{}` | `{board[16], score, won}` |
 | snake | `main` | `{score}` | `{games, foodEaten}` | `{}` | — |
+| squek | `main` | `{wins, fastest}` | `{games, wins, doubleHu, crashes}` | `{difficulty, hint, sound, seen}` | — |
 | memory | `main` | `{easy:{moves,seconds}, hard:{moves,seconds}}` | `{games}` | `{difficulty}` | — |
 | minesweeper | `main` | `{easy:{seconds}, hard:{seconds}}` | `{games, wins}` | `{difficulty, flagMode}` | — |
 | tetris | `main` | `{score, lines}` | `{games}` | `{}` | — |
@@ -113,6 +114,16 @@ v2 代码读 v1 存档靠 defaults 补齐；v1 代码（理论上）遇到 v2 �
 - 配额超限：写入失败时 toast 提示，游戏继续可玩。
 
 沙城突击 `main` 槽位 v2：新增 `settings.primary`（rifle / sniper / shotgun）；v1 → v2 迁移设为 rifle，保留战绩、音效及未知字段。每局弹药、姿态和手雷仅驻留内存，不存续局。
+
+## 雀蛇（squek:main，v1）
+
+键 `homepage:e1:squek:main`，结构版本 1。对局本身不存档：刷新即重开，所以没有 `session` 分区。
+
+- `best.wins`：累计胡牌局数（只增）；`best.fastest`：最快胡牌秒数（0 表示还没有）。
+- `stats.games`：完成的对局数（含被电脑先胡的局）；`wins`：玩家胡牌局数；`doubleHu`：同一 tick 双方同时胡牌的次数；`crashes`：玩家累计碰撞死亡次数。
+- `settings.difficulty`：casual / normal / hard，默认 normal，只影响电脑的判断力与反应频率，不改变移动速度。`hint`：是否显示向听与进张提示（默认开）。`sound`：是否播放合成音效（默认开）。`seen`：是否已看过新手说明（默认关，看过一次后开始画面只留简短规则）。
+
+对局内的 136 张牌只在内存里流转（52 张在四家手上、4 张在场上、80 张在牌库），死亡把整副手牌退回牌库后重抽，因此牌张总数恒为 136。这一步是设计约束，不是存档内容。
 
 ## AI 对话：app:chat（v2）
 localStorage 键 homepage:e1:app:chat，沿用 App.store 信封，服务端不接收存档。

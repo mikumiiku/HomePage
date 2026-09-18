@@ -109,6 +109,8 @@ func gameHandler(w http.ResponseWriter, r *http.Request) {
 		scripts = []string{"/static/js/games/gomoku-engine.js", "/static/js/games/gomoku-ai.js", "/static/js/games/gomoku.js"}
 	} else if id == "go" {
 		scripts = []string{"/static/js/games/go-engine.js", "/static/js/games/go-ai.js", "/static/js/games/go.js"}
+	} else if id == "squek" {
+		scripts = []string{"/static/js/games/squek-engine.js", "/static/js/games/squek-ai.js", "/static/js/games/squek.js"}
 	}
 	render(w, gameTmpl, ViewData{
 		Title:    g.Title,

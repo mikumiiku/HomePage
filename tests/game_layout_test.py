@@ -4,7 +4,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
 BASE = os.environ.get('GAME_BASE', 'http://127.0.0.1:8034')
 OUT = Path('/tmp/game-layout-verification'); OUT.mkdir(exist_ok=True)
-GAMES = ['chess', 'gomoku', 'go', '2048', 'snake', 'memory', 'minesweeper', 'tetris', 'swipe']
+GAMES = ['chess', 'gomoku', 'go', '2048', 'snake', 'squek', 'memory', 'minesweeper', 'tetris', 'swipe']
 errors, results = [], []
 with sync_playwright() as p:
     browser = p.chromium.launch(args=['--no-sandbox', '--enable-unsafe-swiftshader'])
@@ -21,7 +21,7 @@ with sync_playwright() as p:
         assert value['sw'] <= width and value['sh'] <= height, (game, width, height, value)
         assert value['w'] > 60 and value['h'] > 60, (game, value)
         assert value['x'] >= -1 and value['y'] >= -1 and value['x'] + value['w'] <= width + 1 and value['y'] + value['h'] <= height + 1, (game, width, height, value)
-        if game in ['chess','gomoku','go','2048','memory','minesweeper','swipe']:
+        if game in ['chess','gomoku','go','2048','squek','memory','minesweeper','swipe']:
             assert abs(value['x'] + value['w']/2 - width/2) <= 2, (game, value)
         results.append(dict(game=game, viewport=[width,height], geometry=value))
     for width,height in [(1440,900),(390,844),(844,390),(320,568)]:
@@ -33,7 +33,7 @@ with sync_playwright() as p:
             page.wait_for_timeout(250)
             if game in ['memory','minesweeper']:
                 page.locator('.overlay .choices button').first.click()
-            elif game in ['snake','tetris','swipe']:
+            elif game in ['snake','squek','tetris','swipe']:
                 page.locator('.overlay .choices button').first.click()
             page.wait_for_timeout(150)
             geometry(game,width,height)
