@@ -39,3 +39,9 @@
 2026-09-18 用户授权后发布：工作树先提交（`feat: 新增雀蛇（麻将贪吃蛇）小游戏`）再编译，产物经 rename 换入 `bin/homepage`（运行中的旧进程持有旧 inode，直接覆盖会失败），发布前二进制备份在 `/tmp/homepage-before-squek`。重启走面板 HomePage 项目的重启操作，重启后新进程 PID 变化。
 
 发布后核对：`/healthz` 返回 ok；`/`、`/games/`、`/game/snake`、`/game/squek` 均 200；`/game/squek` 引用的五个资源（squek-engine/ai/主脚本、squek.css、domino-tiles.svg）带新二进制 mtime 指纹且全部 200；集合页出现「雀蛇」卡片与新图标。线上浏览器冒烟（全新上下文，无本地存档）：开局到 PLAYING 正常，牌张守恒 136，console 与 pageerror 均为 0，截图 `/tmp/squek-verification/09-prod-games.png`、`10-prod-playing.png`。
+
+## 第二轮发布状态
+
+2026-09-18 用户授权后发布：提交 `fix(squek): 牌面改矢量绘制、局内标签改英文图标、降速并加入银金秒` 后编译，产物仍经 rename 换入 `bin/homepage`，发布前二进制备份在 `/tmp/homepage-before-round2`；面板 HomePage 项目重启后新进程 PID 变化。
+
+发布后核对：`/healthz` 返回 ok；`/`、`/games/`、`/game/snake`、`/game/go`、`/game/squek` 均 200；`/game/squek` 的四个雀蛇资源带新指纹（1789746706），四个新下载的 Bootstrap Icons（clock / speedometer2 / box-seam / grid-3x3-gap）均 200。线上浏览器冒烟（全新上下文）：stepMs 360、金秒 30000、银秒 12000、牌张守恒 136、HUD 图标 5 个、状态牌显示 RESPAWN 1，console 与 pageerror 为 0。截图：`/tmp/squek-verification/13-prod-v2.png`（桌面）、`14-prod-v2-mobile.png`（手机）。
