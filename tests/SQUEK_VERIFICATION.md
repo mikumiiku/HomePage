@@ -22,3 +22,9 @@
 - AI 只做目标评估 + BFS 路径 + 一步预判，不做多步博弈搜索；抢牌与干扰是启发式权重，不代表最优打牌。
 - canvas 里的小字在 320px 宽（格子约 8px）时只显示单字数字与花色条，读清整手牌要靠下方手牌条；这是固定 36×24 网格在窄屏的取舍。
 - localStorage 被禁用时退化为内存存档，战绩当次会话有效。
+
+## 发布状态
+
+2026-09-18 用户授权后发布：工作树先提交（`feat: 新增雀蛇（麻将贪吃蛇）小游戏`）再编译，产物经 rename 换入 `bin/homepage`（运行中的旧进程持有旧 inode，直接覆盖会失败），发布前二进制备份在 `/tmp/homepage-before-squek`。重启走面板 HomePage 项目的重启操作，重启后新进程 PID 变化。
+
+发布后核对：`/healthz` 返回 ok；`/`、`/games/`、`/game/snake`、`/game/squek` 均 200；`/game/squek` 引用的五个资源（squek-engine/ai/主脚本、squek.css、domino-tiles.svg）带新二进制 mtime 指纹且全部 200；集合页出现「雀蛇」卡片与新图标。线上浏览器冒烟（全新上下文，无本地存档）：开局到 PLAYING 正常，牌张守恒 136，console 与 pageerror 均为 0，截图 `/tmp/squek-verification/09-prod-games.png`、`10-prod-playing.png`。
