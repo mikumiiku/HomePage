@@ -56,3 +56,9 @@
 - 文案：开局说明加 WRAP AROUND 一条，旧文案里的「撞墙」已清理。
 
 回归：`node tests/squek_ai_test.cjs` 9 项（新增「路径与预判在循环边界上计算」：空场从 (0,5) 到 (19,5) 距离为 1、蛇头在最右侧时朝边界走才是最近路径）、`node tests/squek_engine_test.cjs` 10 项、`go test ./...`、`python3 tests/squek_test.py` 13 组（新增循环边界用例：一直朝右走，观察到蛇头 x 从 35 跳到 0 且死亡计数未增加）、`python3 tests/game_layout_test.py` 47 组全部通过。
+
+## 第三轮发布状态
+
+2026-09-18 用户要求后发布：提交 `feat(squek): 地图边界改为循环穿越` 后编译，产物经 rename 换入 `bin/homepage`，发布前二进制备份在 `/tmp/homepage-before-round3`；面板 HomePage 项目重启后新进程 PID 变化。
+
+发布后核对：`/healthz` 返回 ok、`/game/squek` 200；线上浏览器冒烟（全新上下文）无 console 与 pageerror，并抓到一条跨缝的蛇（CPU.02 机身 x 覆盖 0 与 35，13 节），确认「一半出去一半进来」的渲染正确，截图 `/tmp/squek-verification/15-wrap.png`。
