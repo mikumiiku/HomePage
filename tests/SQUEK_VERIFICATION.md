@@ -73,3 +73,9 @@
 - 调试快照新增 `headTile` / `handKinds` / 场上牌 `name`，供回归断言使用。
 
 回归：`python3 tests/squek_test.py` 13 组通过，其中新增断言——吃牌后 `hand[0]` 等于「按吃牌前场上的位置找到的那张牌」、`hand[1:]` 等于吃牌前的 13 张顺序、`headTile` 一致、手牌条出现且仅出现一个 `.sq-gap`、最后一格是牌头；弃牌后 `handKinds` 已排序且空位消失。`node tests/squek_engine_test.cjs` 10 项、`node tests/squek_ai_test.cjs` 9 项、`go test ./...`、`python3 tests/game_layout_test.py` 47 组全部通过，截图 `/tmp/squek-verification/16-head-tile.png`。
+
+## 第四轮发布状态
+
+2026-09-18 用户要求后发布：提交 `feat(squek): 增加牌头，吃牌不排牌、打出后再理牌` 后编译，产物经 rename 换入 `bin/homepage`，发布前二进制备份在 `/tmp/homepage-before-round4`；面板 HomePage 项目重启后新进程 PID 变化。
+
+发布后核对：`/healthz` 返回 ok、`/game/squek` 的脚本带新指纹（1789831613）；线上浏览器冒烟（全新上下文）无 console 与 pageerror，抓到一次玩家吃牌：`headTile` 与 `hand[0]` 同为 8条、手牌条出现 1 个牌头空位、最后一格是「打出八条」，截图 `/tmp/squek-verification/17-prod-head.png`。
