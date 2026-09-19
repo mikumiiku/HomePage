@@ -62,3 +62,14 @@
 2026-09-18 用户要求后发布：提交 `feat(squek): 地图边界改为循环穿越` 后编译，产物经 rename 换入 `bin/homepage`，发布前二进制备份在 `/tmp/homepage-before-round3`；面板 HomePage 项目重启后新进程 PID 变化。
 
 发布后核对：`/healthz` 返回 ok、`/game/squek` 200；线上浏览器冒烟（全新上下文）无 console 与 pageerror，并抓到一条跨缝的蛇（CPU.02 机身 x 覆盖 0 与 35，13 节），确认「一半出去一半进来」的渲染正确，截图 `/tmp/squek-verification/15-wrap.png`。
+
+## 2026-09-18 第四轮调整：牌头
+
+用户要求增加「牌头」概念：吃进牌时先不排牌，整手往后顺一位、蛇头就是这张新牌，打出之后才排牌。
+
+- 吃牌：`s.hand.unshift(新牌)`，不再 `sortHand`；配合移动阶段「头进尾不退」，`segments[0]` 与 `hand[0]` 恰好都是刚吃进的牌（沿用第 8 节 `display[i] = hand[i]` 的映射）。
+- 弃牌：`doDiscard()` 里删牌、收尾后再 `sortHand()`，这时才重新映射牌面；开局发牌与重生仍然直接排好。
+- 手牌条：14 张时把牌头挪到最右，前面插入一个宽度等于一张牌的 `.sq-gap` 空位（日麻摸牌位）；查看电脑手牌时同样如此，因此看蛇头就知道它刚摸到什么。
+- 调试快照新增 `headTile` / `handKinds` / 场上牌 `name`，供回归断言使用。
+
+回归：`python3 tests/squek_test.py` 13 组通过，其中新增断言——吃牌后 `hand[0]` 等于「按吃牌前场上的位置找到的那张牌」、`hand[1:]` 等于吃牌前的 13 张顺序、`headTile` 一致、手牌条出现且仅出现一个 `.sq-gap`、最后一格是牌头；弃牌后 `handKinds` 已排序且空位消失。`node tests/squek_engine_test.cjs` 10 项、`node tests/squek_ai_test.cjs` 9 项、`go test ./...`、`python3 tests/game_layout_test.py` 47 组全部通过，截图 `/tmp/squek-verification/16-head-tile.png`。

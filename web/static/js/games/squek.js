@@ -489,7 +489,7 @@
     if (winners.length) {
       winners.forEach(function (p) {
         growTail(p.s);
-        p.s.hand = E.sortHand(p.s.hand.concat([p.eat.tile]));
+        p.s.hand.unshift(p.eat.tile);
         p.s.state = 'WINNER';
         p.s.ghost = false;
         var at = game.field.indexOf(p.eat);
@@ -545,7 +545,8 @@
   function eatTile(s, f) {
     var at = game.field.indexOf(f);
     if (at >= 0) game.field.splice(at, 1);
-    s.hand = E.sortHand(s.hand.concat([f.tile]));
+    /* 牌头：吃进的牌先不排牌，整手往后顺一位，蛇头就是这张新牌（第 8 节的映射）。 */
+    s.hand.unshift(f.tile);
     /* 身体已经在移动阶段长出一节（这一 tick 不收尾），这里不再重复加长。 */
     s.state = 'DECISION';
     s.ghost = true;                                   // 决策态退出碰撞系统（第 15 节）
@@ -599,6 +600,8 @@
     s.hand.splice(index, 1);
     game.pool.push(tile);
     if (s.segments.length > BODY) s.segments.pop();
+    /* 打出之后才排牌：牌面重新映射，蛇的空间位置不变（第 9 节）。 */
+    s.hand = E.sortHand(s.hand);
     s.state = 'NORMAL';
     s.ghost = headBlocked(s);
     s.prev = s.segments;
@@ -1030,8 +1033,20 @@
         empty.textContent = 'DEALING…';
         tilesRow.appendChild(empty);
       }
-      target.hand.forEach(function (tile, i) {
-        tilesRow.appendChild(tileButton(tile, i, acting));
+      /* 决策中（14 张）把牌头挪到最右，前面空一牌的距离，像日麻的摸牌位；
+         其余时候按手牌顺序平铺。 */
+      var head14 = target.hand.length === BODY + 1;
+      var order = target.hand.map(function (tile, i) { return i; });
+      if (head14) { order.splice(0, 1); order.push(0); }
+      order.forEach(function (idx, pos) {
+        if (head14 && pos === order.length - 1) {
+          var gap = document.createElement('span');
+          gap.className = 'sq-gap';
+          gap.setAttribute('aria-hidden', 'true');
+          gap.style.width = tilePx() + 'px';
+          tilesRow.appendChild(gap);
+        }
+        tilesRow.appendChild(tileButton(target.hand[idx], idx, acting));
       });
       barLabel.textContent = acting ? 'PICK ONE'
         : (viewing === 'player' || !viewing ? 'YOUR HAND' : target.def.name + ' · PUBLIC');
@@ -1341,13 +1356,17 @@
         phase: game.phase, time: game.time, pool: game.pool.length, speed: game.speed,
         gold: game.gold, silver: SILVER_MS,
         stepMs: BASE_STEP,
-        field: game.field.map(function (f) { return { x: f.x, y: f.y, tile: E.labelOfId(f.tile) }; }),
+        field: game.field.map(function (f) {
+          return { x: f.x, y: f.y, tile: E.labelOfId(f.tile), name: E.fullNameOfId(f.tile) };
+        }),
         winner: game.winner ? game.winner.def.name : null,
         huForm: game.huForm, doubleHu: game.doubleHu,
         snakes: game.snakes.map(function (s) {
           return {
             id: s.id, state: s.state, hand: s.hand.map(E.labelOfId), tiles: s.hand.length,
-            dir: { x: s.dir.x, y: s.dir.y }, head: s.segments[0] || null,
+            head: s.segments[0] || null, headTile: s.hand.length ? E.labelOfId(s.hand[0]) : null,
+            handKinds: s.hand.map(E.kindOf),
+            dir: { x: s.dir.x, y: s.dir.y },
             body: s.segments.map(function (c) { return { x: c.x, y: c.y }; }),
             ghost: s.ghost, invincible: isInvincible(s), deaths: s.deathCount
           };

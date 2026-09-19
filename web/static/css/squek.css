@@ -94,6 +94,8 @@
   transition: transform .08s, box-shadow .08s;
 }
 .sq-tile canvas { display: block; }
+/* 牌头位置：刚吃进的牌与其余手牌之间空出一张牌的距离（宽度由脚本按牌面尺寸给）。 */
+.sq-gap { flex: 0 0 auto; align-self: stretch; }
 .sq-tile:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--sq-shadow); }
 .sq-tile.is-static { cursor: default; opacity: .8; box-shadow: none; }
 

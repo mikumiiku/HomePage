@@ -112,6 +112,7 @@ with sync_playwright() as p:
     # 抢牌：朝最近的场上牌走，直到吃进一张（最多 40 秒）
     deadline = 90000
     eaten = False
+    prev_state = None
     while deadline > 0 and not eaten:
         st = page.evaluate('App.squek.state()')
         if st['phase'] != 'PLAYING':
@@ -120,6 +121,7 @@ with sync_playwright() as p:
         if me['state'] == 'DECISION':
             eaten = True
             break
+        prev_state = st
         name = steer_towards(page, st)
         if name:
             page.evaluate('App.squek.steer(%s)' % json.dumps(name))
@@ -135,6 +137,20 @@ with sync_playwright() as p:
     expect(page.locator('.sq-tile')).to_have_count(14)
     assert 'DRAW' in page.locator('.sq-msg').inner_text()
     page.screenshot(path=str(OUT / '03-discard.png'))
+
+    # 牌头：刚吃进的牌不参与排牌，而是当蛇头，其余手牌整体往后顺一位
+    assert prev_state, '没有记录到吃牌前的状态'
+    prev_me = next(x for x in prev_state['snakes'] if x['id'] == 'player')
+    head = me['head']
+    eaten_tile = next((t for t in prev_state['field'] if t['x'] == head['x'] and t['y'] == head['y']), None)
+    assert eaten_tile, ('没找到刚吃掉的牌', head, prev_state['field'])
+    assert me['hand'][0] == eaten_tile['tile'], ('蛇头应当就是刚吃进的牌', me['hand'][0], eaten_tile)
+    assert me['headTile'] == eaten_tile['tile'], me['headTile']
+    assert me['hand'][1:] == prev_me['hand'], ('其余手牌应当整体后移一位', me['hand'], prev_me['hand'])
+    # 手牌条：牌头在最右，前面空一牌的距离
+    assert page.locator('.sq-gap').count() == 1, '决策中应当出现一个牌头空位'
+    last_label = page.locator('.sq-tile').last.get_attribute('aria-label')
+    assert last_label == '打出' + eaten_tile['name'], (last_label, eaten_tile)
 
     # 决策态是幽灵：其他蛇可以穿过，自己不会死
     assert me['ghost'] is True, me
@@ -163,6 +179,9 @@ with sync_playwright() as p:
     st = page.evaluate('App.squek.state()')
     me = next(s for s in st['snakes'] if s['id'] == 'player')
     assert me['tiles'] == 13, me
+    # 打出之后才排牌：手牌重新按万筒条字排序，牌头空位消失
+    assert me['handKinds'] == sorted(me['handKinds']), ('打出后手牌应当已排序', me['hand'])
+    assert page.locator('.sq-gap').count() == 0, '打出后不应再有牌头空位'
     assert len(st['field']) == 4 - deciding(st), st
     assert sum(x['tiles'] for x in st['snakes']) + len(st['field']) + st['pool'] == 136
     for x in st['snakes']:
