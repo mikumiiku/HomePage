@@ -118,4 +118,118 @@ test('引擎在整副牌下不超时（AI 每 200ms 复用）', () => {
   assert(cost < 40, '单次弃牌评估耗时 ' + cost.toFixed(1) + 'ms 过高');
 });
 
+/* 评分助手：hand('123m 55s') 配和牌张 'm4'，返回 scoreHand 的结果。 */
+function score(text, win) {
+  const h = hand(text);
+  return E.scoreHand(h, win ? E.kindOfTile(win[0], Number(win[1])) : undefined);
+}
+function names(s) { return s.yaku.map((y) => y.name); }
+
+test('通常役：平和、断幺九、一杯口、二杯口、三色同顺、一气通贯', () => {
+  const pinfu = score('123m 456m 789m 123p 55s', 'm4');
+  assert.deepEqual(names(pinfu), ['平和', '一气通贯']);
+  assert.equal(pinfu.han, 3);
+  assert.equal(pinfu.fu, 30, '全顺子平和两面：底20 + 门清10');
+  assert.equal(pinfu.points, 3900);
+
+  const tanyao = score('234m 567m 345p 678p 22s', 'p8');
+  assert.deepEqual(names(tanyao), ['断幺九', '平和']);
+  assert.equal(tanyao.points, 2000, '2番30符');
+
+  assert.deepEqual(names(score('123m 123m 456p 789p 55s', 'p5')), ['一杯口'], '嵌张待ち不成立平和');
+  assert.deepEqual(names(score('123m 123m 456p 789p 55s', 'p6')), ['平和', '一杯口']);
+  assert.deepEqual(names(score('112233m 445566p 77s', 'p4')), ['平和', '二杯口']);
+  assert.deepEqual(names(score('123m 456m 123p 123s 77m', 'm4')), ['平和', '三色同顺']);
+});
+
+test('通常役：刻子系（三色同刻、三暗刻、役牌、小三元）', () => {
+  assert.deepEqual(names(score('111m 111p 111s 234m 55m', 'm5')), ['三色同刻', '三暗刻']);
+  const sho = score('555z 666z 111m 234m 77z', 'z7');
+  assert.deepEqual(names(sho), ['三暗刻', '红中', '发财', '小三元', '混一色']);
+  assert.equal(sho.points, 16000, '9 番是倍满');
+  assert.equal(sho.limit, '倍满');
+});
+
+test('通常役：全带与一色（混全带、纯全带、混一色、清一色、混老头）', () => {
+  assert.deepEqual(names(score('123m 789m 123p 789p 11z', 'm1')), ['平和', '混全带幺九']);
+  const junchan = score('123m 789m 123p 789p 11m', 'm1');
+  assert.deepEqual(names(junchan), ['平和', '纯全带幺九']);
+  assert.equal(junchan.points, 7700, '4番30符');
+  assert.deepEqual(names(score('123m 234m 345m 456m 77m', 'm4')), ['平和', '清一色']);
+  assert.deepEqual(names(score('123m 456m 789m 111z 22z', 'z1')), ['一气通贯', '混一色']);
+  const honroutou = score('11m 99m 11p 99s 11z 22z 55z', 'z5');
+  assert.equal(honroutou.form, '七对子');
+  assert.deepEqual(names(honroutou), ['七对子', '混老头']);
+  assert.equal(honroutou.fu, 25, '七对子固定 25 符');
+  assert.equal(honroutou.points, 6400, '4番25符');
+});
+
+test('役满：国士无双、四暗刻、大三元、字一色、清老头、绿一色、九莲宝灯、大四喜', () => {
+  const cases = [
+    ['19m 19p 19s 1234567z 7z', 'z7', '十三幺', '国士无双'],
+    ['111m 222m 333m 444m 55m', 'm5', '标准胡', '四暗刻'],
+    ['555z 666z 777z 123m 44m', 'm4', '标准胡', '大三元'],
+    ['11122233344455z', 'z5', '标准胡', '字一色'],
+    ['111m 999m 111p 999p 11s', 's1', '标准胡', '清老头'],
+    ['222s 333s 444s 666s 88s', 's8', '标准胡', '绿一色'],
+    ['1112345678999m 5m', 'm5', '标准胡', '九莲宝灯'],
+    ['11z 22z 33z 44z 55z 66z 77z', 'z7', '七对子', '字一色'],
+  ];
+  for (const [text, win, form, yaku] of cases) {
+    const s = score(text, win);
+    assert(s, text + ' 应当和牌');
+    assert.equal(s.form, form, text);
+    assert(names(s).includes(yaku), text + ' 缺少 ' + yaku + '：' + names(s).join(' '));
+    assert.equal(s.han, 13, text);
+    assert.equal(s.points, 32000, text);
+    assert.equal(s.yakuman, true, text);
+  }
+  assert.equal(score('11122233344455z', 'z5').limit, '役满（不叠加）', '字一色+大四喜+四暗刻算一个役满');
+});
+
+test('符：暗刻、役牌雀头、待ち型与进位', () => {
+  /* 单骑 + 幺九暗刻：20 + 10 + 8 + 2 = 40 */
+  const tanki = score('111m 999m 111p 999p 11s', 's1');
+  assert.equal(tanki.yakuman, true, '这副是清老头役满，换一副非役满的');
+  const anko = score('111m 222m 333m 456p 77s', 's7');
+  assert.equal(anko.fu, 50, '20 + 10 + (8+4+4) + 单骑2 = 48 进位到 50');
+  const yakuPair = score('111m 222p 333s 456m 77z', 'z7');
+  assert.equal(yakuPair.fu, 50, '白板雀头 +2 符');
+  const kanchan = score('123m 234m 567m 234p 11z', 'p3');
+  assert.equal(kanchan.fu, 40, '20 + 10 + 嵌张 2 = 32 进位到 40');
+  assert.equal(kanchan.han, 0);
+  assert.deepEqual(names(kanchan), ['底和'], '无役也记 0 番底和');
+  assert.equal(kanchan.points, 1000, '无役底和 1000 点');
+});
+
+test('点数表：满贯及以上按档位，4 番 40 符以上并到满贯', () => {
+  assert.deepEqual(E.pointsOf(1, 30), { points: 1000, limit: '' });
+  assert.deepEqual(E.pointsOf(2, 30), { points: 2000, limit: '' });
+  assert.deepEqual(E.pointsOf(3, 30), { points: 3900, limit: '' });
+  assert.deepEqual(E.pointsOf(4, 30), { points: 7700, limit: '' });
+  assert.deepEqual(E.pointsOf(4, 40), { points: 8000, limit: '满贯' }, '基本点超过 2000 并到满贯');
+  assert.deepEqual(E.pointsOf(5, 30), { points: 8000, limit: '满贯' });
+  assert.deepEqual(E.pointsOf(6, 30), { points: 12000, limit: '跳满' });
+  assert.deepEqual(E.pointsOf(8, 30), { points: 16000, limit: '倍满' });
+  assert.deepEqual(E.pointsOf(11, 30), { points: 24000, limit: '三倍满' });
+  assert.deepEqual(E.pointsOf(13, 30), { points: 32000, limit: '役满' });
+  assert.equal(E.pointsOf(0, 30).points, 1000, '无役底和');
+});
+
+test('高点法：同分取番数高的拆法', () => {
+  /* 11223344556677m 既是七对子+清一色（8 番），也是二杯口+平和+清一色（10 番）。 */
+  const s = score('11223344556677m', 'm6');
+  assert.equal(s.form, '标准胡');
+  assert.deepEqual(names(s), ['平和', '二杯口', '清一色']);
+  assert.equal(s.han, 10);
+});
+
+test('摘要文本与不和判定', () => {
+  assert.equal(E.scoreText(score('123m 456m 789m 123p 55s', 'm4')), '3 番 30 符　3900 点');
+  assert.equal(E.scoreText(score('111m 222m 333m 444m 55m', 'm5')), '役满　32000 点');
+  assert.equal(E.scoreText(score('123m 234m 567m 234p 11z', 'p3')), '0 番 40 符　1000 点');
+  assert.equal(E.scoreHand(hand('123m 456m 789m 123p 5s'), E.kindOfTile('s',3)), null, '十三张不成和');
+  assert.equal(score('123m 456m 789m 123p 55s', 'm4').form, E.winForm(hand('123m 456m 789m 123p 55s')));
+});
+
 console.log('PASS: ' + count + ' engine cases');

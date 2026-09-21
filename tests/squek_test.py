@@ -96,10 +96,12 @@ with sync_playwright() as p:
     assert 'squek-engine.js' in page.content() and 'squek-ai.js' in page.content()
     assert 'squek.css' in page.content(), '雀蛇样式没有引入'
 
-    # 开始画面：首轮显示新手说明，含五条上手信息
+    # 开始画面：首轮显示新手说明，含上手信息与计分说明
     overlay = page.locator('.overlay').first
     expect(overlay).to_be_visible()
     assert '开始游戏' in overlay.inner_text()
+    intro = page.evaluate("() => document.getElementById('stage').dataset.instructions")
+    assert 'SCORE' in intro and '番种' in intro, intro
     page.screenshot(path=str(OUT / '01-start.png'))
 
     page.locator('.overlay .choices button', has_text='开始游戏').click()
@@ -148,7 +150,10 @@ with sync_playwright() as p:
     while deadline > 0 and not eaten:
         st = page.evaluate('App.squek.state()')
         if st['phase'] != 'PLAYING':
-            break
+            # 电脑可能抢先胡牌结束这一局，重开一局接着抢
+            st = ensure_playing(page)
+            if st['phase'] != 'PLAYING':
+                break
         me = next(s for s in st['snakes'] if s['id'] == 'player')
         if me['state'] == 'DECISION':
             eaten = True
@@ -380,29 +385,40 @@ with sync_playwright() as p:
         assert len(x['body']) == x['tiles'] or x['tiles'] == 0, x
     page.screenshot(path=str(OUT / '06-running.png'))
 
-    # 胡牌路径：注入一个「必定胡牌」的判定桩，验证胜利横幅、结算面板与战绩写入。
+    # 胡牌路径：注入一个「必定胡牌」的评分桩，验证胜利横幅、结算面板、番符点与纪录写入。
     page.goto(BASE + '/game/squek', wait_until='domcontentloaded')
     page.locator('.overlay .choices button', has_text='开始游戏').click()
     start_round(page)
     page.evaluate("""() => {
-      const real = SquekEngine.winForm;
-      window.__squekRealWinForm = real;
-      SquekEngine.winForm = () => '七对子';
+      window.__squekRealScoreHand = SquekEngine.scoreHand;
+      SquekEngine.scoreHand = () => ({
+        form: '七对子',
+        yaku: [{ name: '七对子', han: 2 }, { name: '清一色', han: 6 }],
+        han: 8, fu: 25, points: 16000, limit: '倍满', yakuman: false
+      });
     }""")
     page.wait_for_function("App.squek.state().phase === 'OVER'", timeout=30000)
     over = page.evaluate('App.squek.state()')
     assert over['winner'], over
     assert over['huForm'] == '七对子', over
     assert len(over['winner']) > 0
+    scores = over['scores']
+    assert scores and len(scores) == len(over['scores']), over
+    assert scores[0]['yaku'] == [{'name': '七对子', 'han': 2}, {'name': '清一色', 'han': 6}], scores
+    assert (scores[0]['han'], scores[0]['fu'], scores[0]['points']) == (8, 25, 16000), scores
+    assert scores[0]['limit'] == '倍满', scores
+    assert scores[0]['text'] == '8 番 25 符　16000 点（倍满）', scores[0]['text']
     expect(page.locator('.sq-msg')).to_have_text('HU')
     page.screenshot(path=str(OUT / '07-hu.png'))
 
-    # 结算面板：胜者名字、牌型与十四张牌
+    # 结算面板：胜者名字、番种、番符点与十四张牌
     overlay = page.locator('.overlay').first
     expect(overlay).to_be_visible(timeout=6000)
     text = overlay.inner_text()
     assert over['winner'] in text, text
-    assert '七对子' in text, text
+    assert '七对子・清一色' in text, text
+    assert '8 番 25 符　16000 点（倍满）' in text, text
+    assert '最高得点' in text, text
     if over['doubleHu']:
         assert 'DOUBLE HU' in text and '双胡' in text, text
     else:
@@ -411,6 +427,11 @@ with sync_playwright() as p:
     saved = page.evaluate("App.store.load('squek','main').data")
     assert saved['stats']['games'] >= 1, saved
     assert len(saved['stats']) >= 3, saved
+    assert saved['stats']['points'] >= 16000, saved['stats']
+    assert saved['best']['score'] == 16000, saved['best']
+    assert page.evaluate("App.store.load('squek','main').version") == 2
+    hud_best = page.evaluate("() => document.getElementById('hud-best').textContent")
+    assert '最高 16000 点' in hud_best, hud_best
     assert page.evaluate('App.squek.state().snakes[0].tiles') == 14 or True
     results.append(dict(case='win', state=over, stats=saved['stats']))
 
@@ -420,8 +441,26 @@ with sync_playwright() as p:
     st = page.evaluate('App.squek.state()')
     assert len(st['field']) == 4, st
     assert sum(x['tiles'] for x in st['snakes']) + len(st['field']) + st['pool'] == 136, st
-    page.evaluate('() => { SquekEngine.winForm = window.__squekRealWinForm; }')
+    page.evaluate('() => { SquekEngine.scoreHand = window.__squekRealScoreHand; }')
     results.append(dict(case='after-win', state=st))
+
+    # 老存档迁移：塞一份 v1 存档再打开，应当补上最高得点字段且不动原有纪录
+    page.evaluate("""() => {
+      localStorage.setItem('homepage:e1:squek:main', JSON.stringify({
+        v: 1, t: Date.now(),
+        d: { best: { wins: 3, fastest: 42 },
+             stats: { games: 5, wins: 3, doubleHu: 1, crashes: 4 },
+             settings: { difficulty: 'hard', hint: false, sound: false, seen: true } }
+      }));
+    }""")
+    page.goto(BASE + '/game/squek', wait_until='domcontentloaded')
+    page.wait_for_timeout(600)
+    migrated = page.evaluate("() => ({ d: App.store.load('squek','main').data, v: App.store.load('squek','main').version })")
+    assert migrated['v'] == 2, migrated
+    assert migrated['d']['best'] == {'wins': 3, 'fastest': 42, 'score': 0}, migrated['d']['best']
+    assert migrated['d']['stats']['points'] == 0, migrated['d']['stats']
+    assert migrated['d']['settings']['difficulty'] == 'hard', migrated['d']['settings']
+    results.append(dict(case='migrate', best=migrated['d']['best']))
 
     # 牌面贴图：34 张自托管麻将牌都要能加载。加载失败会静默退回占位画法，
     # 界面上看不出异常，所以这里逐个 Image() 探一遍。
@@ -458,4 +497,4 @@ with sync_playwright() as p:
     (OUT / 'report.json').write_text(json.dumps(dict(cases=results, errors=errors), ensure_ascii=False, indent=2))
     browser.close()
 
-print(f'PASS: 雀蛇回归 {len(results)} 个用例（发牌准备、开局、守恒、抢牌弃牌、观战、暂停、视口、设置、重开、胡牌结算、牌面贴图、棋盘尺寸）')
+print(f'PASS: 雀蛇回归 {len(results)} 个用例（发牌准备、开局、守恒、抢牌弃牌、观战、暂停、视口、设置、重开、胡牌结算与番符点、老存档迁移、牌面贴图、棋盘尺寸）')

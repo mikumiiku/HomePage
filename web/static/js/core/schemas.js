@@ -69,15 +69,26 @@
   });
 
   D('squek', 'main', {
-    version: 1,
+    version: 2,
+    migrations: {1: function (d) {
+      d.best.score = d.best.score || 0;
+      d.stats.points = d.stats.points || 0;
+      return d;
+    }},
     defaults: function () {
       return {
-        best: { wins: 0, fastest: 0 },
-        stats: { games: 0, wins: 0, doubleHu: 0, crashes: 0 },
+        best: { wins: 0, fastest: 0, score: 0 },
+        stats: { games: 0, wins: 0, doubleHu: 0, crashes: 0, points: 0 },
         settings: { difficulty: 'normal', hint: true, sound: true, seen: false },
       };
     },
-    bestText: function (b) { return b && b.wins > 0 ? '胡牌 ' + b.wins + ' 局' : null; },
+    bestText: function (b) {
+      if (!b) return null;
+      var parts = [];
+      if (b.wins > 0) parts.push('胡牌 ' + b.wins + ' 局');
+      if (b.score > 0) parts.push('最高 ' + b.score + ' 点');
+      return parts.length ? parts.join(' · ') : null;
+    },
   });
 
   D('memory', 'main', {

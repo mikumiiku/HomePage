@@ -59,7 +59,7 @@
     now: 0,                   // 只在不暂停时前进的游戏时钟（毫秒）
     time: 0,                  // 对局秒数
     pool: [], field: [], snakes: [],
-    winner: null, winners: [], huForm: '', doubleHu: false,
+    winner: null, winners: [], huForm: '', doubleHu: false, newScoreRecord: false,
     speed: 1, countdownEnd: 0, overAt: 0,
     gold: GOLD_MS                 // 每局共用的附加思考时间（毫秒）
   };
@@ -392,7 +392,7 @@
     var wall = E.makeWall(), at = 0;
     game.phase = 'READY';       // 先发牌、停在 READY，等玩家点中间的 READY 按钮才开始倒计时
     game.now = 0; game.time = 0; game.pool = []; game.field = [];
-    game.snakes = []; game.winner = null; game.winners = []; game.huForm = '';
+    game.snakes = []; game.winner = null; game.winners = []; game.huForm = ''; game.newScoreRecord = false;
     game.doubleHu = false; game.speed = 1; game.countdownEnd = 0; game.overAt = 0;
     game.gold = GOLD_MS;
     flights = []; pendingDirs = []; viewing = 'player'; crashed = 0; barSig = '';
@@ -544,8 +544,8 @@
     var winners = [];
     plans.forEach(function (p) {
       if (!p.ate) return;
-      var form = E.winForm(p.s.hand.concat([p.eat.tile]));
-      if (form) { p.win = form; winners.push(p); }
+      var score = E.scoreHand(p.s.hand.concat([p.eat.tile]), E.kindOf(p.eat.tile));
+      if (score) { p.win = score; winners.push(p); }
     });
     if (winners.length) {
       winners.forEach(function (p) {
@@ -559,7 +559,8 @@
       game.winners = winners.map(function (p) { return p.s; });
       game.doubleHu = winners.length > 1;
       game.winner = game.winners[0];
-      game.huForm = winners[0].win;
+      game.huForm = winners[0].win.form;
+      winners.forEach(function (p) { p.s.score = p.win; });
       endGame();
       return;
     }
@@ -734,6 +735,8 @@
     sfx.hu();
     var playerWon = game.winners.some(function (s) { return s.human; });
     var seconds = Math.round(game.time);
+    var top = bestScore();
+    game.newScoreRecord = top.points > (G.load().data.best.score || 0);
     G.update(function (d) {
       d.stats.games += 1;
       d.stats.crashes = (d.stats.crashes || 0) + crashed;
@@ -743,11 +746,21 @@
         d.best.wins = (d.best.wins || 0) + 1;
         if (!d.best.fastest || seconds < d.best.fastest) d.best.fastest = seconds;
       }
+      /* 累计与最高得点不分胜负都记：电脑胡出大牌同样进纪录。 */
+      d.stats.points = (d.stats.points || 0) + top.points;
+      if (top.points > (d.best.score || 0)) d.best.score = top.points;
     });
     renderAll(true);
     M.announce((game.doubleHu ? '双方同时胡牌' : game.winner.def.name + '胡牌') +
-      '，牌型' + game.huForm + '，用时' + M.fmt.seconds(seconds), true);
+      '，' + E.scoreText(game.winner.score) + '，用时' + M.fmt.seconds(seconds), true);
     huTimer = setTimeout(showResult, HU_HOLD_MS);
+  }
+
+  /* 本局和牌里点数最高的那份（双胡时取大的那份报点）。 */
+  function bestScore() {
+    var top = game.winners[0].score;
+    game.winners.forEach(function (s) { if (s.score.points > top.points) top = s.score; });
+    return top;
   }
 
   function showResult() {
@@ -755,11 +768,17 @@
     var lines = [];
     game.winners.forEach(function (s) {
       lines.push(s.def.name + '：' + E.sortHand(s.hand).map(E.fullNameOfId).join(' '));
+      lines.push('　' + s.score.yaku.map(function (y) { return y.name; }).join('・') +
+        '　' + E.scoreText(s.score));
     });
-    lines.push('牌型：' + game.huForm + '　用时 ' + M.fmt.clock(Math.round(game.time)));
+    lines.push('用时 ' + M.fmt.clock(Math.round(game.time)));
     lines.push(game.doubleHu ? '双胡：双方同时获胜' : (playerWon ? '你抢在电脑前面胡牌' : '电脑先胡牌，本局失败'));
+    var best = G.load().data.best;
+    if (best.score) {
+      lines.push((game.newScoreRecord ? '新纪录：最高得点 ' : '最高得点纪录 ') + best.score + ' 点');
+    }
     if (playerWon) {
-      var fastest = G.load().data.best.fastest || 0;
+      var fastest = best.fastest || 0;
       lines.push(fastest && Math.round(game.time) <= fastest ? '新纪录：最快胡牌' : '最快纪录 ' + M.fmt.clock(fastest));
     }
     M.overlay(stage, {
@@ -1093,6 +1112,13 @@
     return '<span class="ti" role="img" aria-label="' + label + '" title="' + label +
       '" style="--icon:url(/static/vendor/bootstrap-icons/' + name + '.svg' + VER + ')"></span>';
   }
+  /* HUD 的纪录摘要：胡牌局数与最高得点，都没有就显示占位。 */
+  function bestLabel(best) {
+    var parts = [];
+    if (best && best.wins) parts.push('胡牌 ' + best.wins + ' 局');
+    if (best && best.score) parts.push('最高 ' + best.score + ' 点');
+    return parts.length ? parts.join(' · ') : '—';
+  }
   function renderHud() {
     var best = G.load().data.best;
     var labelEl = document.getElementById('hud-score-label');
@@ -1102,7 +1128,7 @@
       labelEl.innerHTML = icon('box-seam', '牌库') + '<span class="sr-only">牌库</span>';
     }
     M.hud.score(game.pool.length);
-    M.hud.best(best && best.wins ? '胡牌 ' + best.wins + ' 局' : '—');
+    M.hud.best(bestLabel(best));
     var chip = M.hud.extra();
     if (chip) {
       if (!chip.dataset.squek) {
@@ -1266,15 +1292,18 @@
     var best = G.load().data.best;
     var lines = settings.seen
       ? ['吃牌凑成四组牌加一对牌就赢。地图上下左右是循环的，撞自己或撞到别的蛇会重生换一副手牌。',
-        '场上常驻四张麻将。吃满十四张后选一张打掉：每次思考 12 银秒，不够用再扣每局共用的 30 金秒。']
+        '场上常驻四张麻将。吃满十四张后选一张打掉：每次思考 12 银秒，不够用再扣每局共用的 30 金秒。',
+        '和牌按日麻番符算点：平和、断幺九、一气通贯、三色同顺、混一色、清一色等都有番，四暗刻、大三元、国士无双是役满；没做出役也能和，只是 0 番底和。']
       : ['MOVE｜方向键 / WASD 转向，也可以在地图上滑动',
         'EAT A TILE｜蛇头碰到麻将就吃进来',
         'DISCARD ONE｜吃满十四张，点一张打掉（每次 12 银秒 + 每局 30 金秒）',
         'MAKE A HAND｜四组牌加一对牌就能胡',
+        'SCORE｜按日麻番种与符数算点，役满最大',
         'WRAP AROUND｜走出边界会从对边回来',
         'CRASH = NEW HAND｜撞到自己或别的蛇会重生并换一副手牌'];
     lines.push('当前难度：' + (DIFF_LABEL[settings.difficulty] || '普通'));
     lines.push(best && best.wins ? '已胡牌 ' + best.wins + ' 局' : '还没有胡过牌');
+    if (best && best.score) lines.push('最高得点 ' + best.score + ' 点');
     M.overlay(stage, {
       intro: true,
       title: '雀蛇',
@@ -1361,7 +1390,7 @@
   chooseBoard(firstBox.w, firstBox.h);
   fit();
   renderHud();
-  M.hud.best(save.best && save.best.wins ? '胡牌 ' + save.best.wins + ' 局' : '—');
+  M.hud.best(bestLabel(save.best));
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', buildSettings);
   else buildSettings();
   showStart();
@@ -1380,6 +1409,13 @@
         }),
         winner: game.winner ? game.winner.def.name : null,
         huForm: game.huForm, doubleHu: game.doubleHu,
+        scores: game.winners.map(function (s) {
+          return {
+            id: s.id, name: s.def.name, form: s.score.form, yaku: s.score.yaku,
+            han: s.score.han, fu: s.score.fu, points: s.score.points,
+            limit: s.score.limit, yakuman: s.score.yakuman, text: E.scoreText(s.score)
+          };
+        }),
         snakes: game.snakes.map(function (s) {
           return {
             id: s.id, state: s.state, hand: s.hand.map(E.labelOfId), tiles: s.hand.length,
