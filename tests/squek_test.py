@@ -45,7 +45,8 @@ def steer_towards(page, state):
 
 
 def deciding(st):
-    """场上牌数 = 4 − 正在选牌（已吃牌未补牌）的蛇数。"""
+    """正在选牌的蛇数。吃牌后场上少一张、补场后回到四张；碰是从牌库取牌，
+    不经过场上，所以场上牌数落在「4 − 这个数」到 4 之间。"""
     return sum(1 for x in st['snakes'] if x['state'] == 'DECISION')
 
 
@@ -184,7 +185,7 @@ with sync_playwright() as p:
     assert eaten or st['snakes'][0]['state'] == 'DECISION', '四十秒内玩家没有吃到牌'
     me = next(x for x in st['snakes'] if x['id'] == 'player')
     assert me['tiles'] == 14, me
-    assert len(st['field']) == 4 - deciding(st), st
+    assert 4 - deciding(st) <= len(st['field']) <= 4, st
     assert sum(x['tiles'] for x in st['snakes']) + len(st['field']) + st['pool'] == 136, '牌张总数变了'
     expect(page.locator('.sq-tile')).to_have_count(14)
     assert 'DRAW' in page.locator('.sq-msg').inner_text()
@@ -226,15 +227,24 @@ with sync_playwright() as p:
     results.append(dict(case='time-bank', timer=timer, gold_after=after['gold']))
 
     # 弃牌：点手牌条第一张，回到 13 张、场上回到 4 张，牌库不变
+    pre = page.evaluate('App.squek.state()')
     page.locator('.sq-tile').first.click()
     page.wait_for_function("App.squek.state().snakes[0].tiles === 13", timeout=5000)
     st = page.evaluate('App.squek.state()')
     me = next(s for s in st['snakes'] if s['id'] == 'player')
     assert me['tiles'] == 13, me
+    # 打出的那张必须洗回牌库，不能原地当补场牌（曾经是 pool.push + pool.pop 的后进先出）
+    pre_ids = set(next(s for s in pre['snakes'] if s['id'] == 'player')['handIds'])
+    gone = pre_ids - set(me['handIds'])
+    assert len(gone) == 1, ('应当正好打出一张', pre_ids, me['handIds'])
+    discarded_id = gone.pop()
+    assert discarded_id not in [f['id'] for f in st['field']], \
+        ('刚打出的牌不该直接变成补场牌', discarded_id, st['field'])
+    assert len(st['field']) <= 4, ('场上不该超过四张', st['field'])
     # 打出之后才排牌：手牌重新按万筒条字排序，牌头空位消失
     assert me['handKinds'] == sorted(me['handKinds']), ('打出后手牌应当已排序', me['hand'])
     assert page.locator('.sq-gap').count() == 0, '打出后不应再有牌头空位'
-    assert len(st['field']) == 4 - deciding(st), st
+    assert 4 - deciding(st) <= len(st['field']) <= 4, st
     assert sum(x['tiles'] for x in st['snakes']) + len(st['field']) + st['pool'] == 136
     for x in st['snakes']:
         assert len(x['body']) == x['tiles'], ('身体节点与手牌数必须一致', x)

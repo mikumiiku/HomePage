@@ -325,8 +325,7 @@
   function fieldAt(x, y) {
     for (var i = 0; i < game.field.length; i++) {
       var f = game.field[i];
-      /* 正在等认领的牌先留给碰的人，蛇不能直接吃掉。 */
-      if (!f.claim && f.x === x && f.y === y) return f;
+      if (f.x === x && f.y === y) return f;
     }
     return null;
   }
@@ -377,8 +376,14 @@
     return true;
   }
   /* 场上补牌：只放合法空白格，避开蛇头前方两格，并尽量与已有麻将拉开距离（第 13 节）。 */
+  /* 补场：把场上补满四张。吃牌时场上少一张，补一张；碰是从牌库里取牌，
+     场上并没少，这时不能补——否则会涨到五张。 */
   function spawnFieldTile() {
-    if (!game.pool.length) return null;
+    while (game.field.length < FIELD_TILES && game.pool.length) {
+      if (!placeFieldTile()) break;
+    }
+  }
+  function placeFieldTile() {
     var occ = occupancy(), x, y;
     var heads = [];
     for (var i = 0; i < game.snakes.length; i++) {
@@ -409,12 +414,11 @@
         else level1.push({ x: x, y: y });
       }
     }
-    var pool = level3.length ? level3 : level2.length ? level2 : level1;
-    if (!pool.length) return null;
-    var spot = pickOne(pool);
-    var entry = { tile: game.pool.pop(), x: spot.x, y: spot.y, hint: 0 };
-    game.field.push(entry);
-    return entry;
+    var spots = level3.length ? level3 : level2.length ? level2 : level1;
+    if (!spots.length) return false;
+    var spot = pickOne(spots);
+    game.field.push({ tile: game.pool.pop(), x: spot.x, y: spot.y, hint: 0 });
+    return true;
   }
 
   function newGame() {
@@ -462,7 +466,7 @@
       s.ghost = false;
     });
     game.pool = wall.slice(at);
-    for (var i = 0; i < FIELD_TILES; i++) spawnFieldTile();
+    spawnFieldTile();
     markHazard();
     renderAll(true);
     M.announce('新的一局：十三张手牌已发好，看完点准备开始', true);
@@ -673,7 +677,7 @@
         start: game.now + i * 12, dur: 420
       });
     }
-    for (i = 0; i < s.hand.length; i++) game.pool.push(s.hand[i]);   // 手牌全部回牌库（第 30 节）
+    for (i = 0; i < s.hand.length; i++) recycleTile(s.hand[i]);   // 手牌全部洗回牌库（第 30 节）
     s.hand = [];
     s.segments = [];
     s.prev = [];
@@ -699,7 +703,6 @@
     var tile = s.hand[index];
     var previousTail = s.segments[s.segments.length - 1];
     s.hand.splice(index, 1);
-    game.pool.push(tile);
     if (s.segments.length > BODY) s.segments.pop();
     /* 打出之后才排牌：牌面重新映射，蛇的空间位置不变（第 9 节）。 */
     s.hand = E.sortHand(s.hand);
@@ -717,8 +720,12 @@
       flash('DISCARD ' + E.labelOfId(tile), 420);
       M.announce('打出' + E.fullNameOfId(tile), true);
     }
-    /* 补进场上的这张牌就是刚打出的那张：挂上认领标记，看有没有人要碰。 */
-    openClaim(s, spawnFieldTile());
+    /* 先补场再洗回牌库：补场的这张要从牌库里抽，绝不能再是刚打出的那张。
+       打出的牌插到牌库随机位置（见 recycleTile），之后才可能被重新抽到。 */
+    spawnFieldTile();
+    recycleTile(tile);
+    /* 这张打出的牌在牌库里等 8 秒，看有没有人要碰。 */
+    openClaim(s, tile);
     renderAll(true);
   }
 
@@ -738,16 +745,22 @@
       return n === 2;
     });
   }
-  function openClaim(from, entry) {
+  /* 打出的牌洗回牌库：插到随机位置，而不是放回末尾——`spawnFieldTile` 是从
+     末尾 pop 的，放末尾就等于下一张补场又是它自己。 */
+  function recycleTile(tile) {
+    game.pool.splice(rndInt(game.pool.length + 1), 0, tile);
+  }
+  /* 认领期间这张牌只是被「预留」：它已经在牌库里，但没人碰就走人。
+     因为不在场上，路过的蛇自然吃不到，不需要额外的占位标记。 */
+  function openClaim(from, tile) {
     expireClaim();
-    if (!entry || !isMoving(from)) return;
-    var kind = E.kindOf(entry.tile);
+    if (tile === undefined || tile === null || !isMoving(from)) return;
+    var kind = E.kindOf(tile);
     var list = ponCandidates(kind, from);
     if (!list.length) return;
     var me = snakeById('player');
     var humans = list.indexOf(me) >= 0;
-    claim = { tile: entry.tile, kind: kind, from: from, until: game.now + CLAIM_MS, entry: entry, candidates: list };
-    entry.claim = true;                       // 认领期间这张牌不能被路过吃掉
+    claim = { tile: tile, kind: kind, from: from, until: game.now + CLAIM_MS, candidates: list };
     /* 玩家能碰就开窗口等它决定；只有电脑能碰时立刻结算，不打断节奏。 */
     if (humans) {
       showClaim(from, kind);
@@ -774,13 +787,12 @@
     hideClaim();
     var taker = ponner;
     if (!taker && allowAi) taker = pickPonner(c.candidates, c.kind);
-    if (taker && c.entry && game.field.indexOf(c.entry) >= 0 &&
-        ponCandidates(c.kind, c.from).indexOf(taker) >= 0) {
-      ponTile(taker, c.entry);
-      spawnFieldTile();
-    } else if (c.entry) {
-      c.entry.claim = false;
+    var at = game.pool.indexOf(c.tile);
+    if (taker && at >= 0 && ponCandidates(c.kind, c.from).indexOf(taker) >= 0) {
+      game.pool.splice(at, 1);                 // 从牌库里取回这张牌给碰的人
+      ponTile(taker, c.tile);
     }
+    /* 没人碰就什么都不用做：那张牌已经洗回牌库了。 */
     renderAll(true);
   }
   function expireClaim() {
@@ -795,12 +807,10 @@
   }
   function hideClaim() { claimBar.hidden = true; }
   /* 碰：身体长一节、拿进这张牌、记一个明刻，然后进入选牌。 */
-  function ponTile(s, entry) {
-    var at = game.field.indexOf(entry);
-    if (at >= 0) game.field.splice(at, 1);
+  function ponTile(s, tile) {
     growTail(s);
-    s.hand.unshift(entry.tile);
-    s.melds.push({ kind: E.kindOf(entry.tile) });
+    s.hand.unshift(tile);
+    s.melds.push({ kind: E.kindOf(tile) });
     s.prev = cloneCells(s.segments);
     s.state = 'DECISION';
     s.ghost = true;
@@ -810,8 +820,8 @@
     if (s.human) {
       viewing = 'player';
       sfx.eat();
-      flash('PON ' + E.labelOfId(entry.tile), 520);
-      M.announce('碰' + E.fullNameOfId(entry.tile), true);
+      flash('PON ' + E.labelOfId(tile), 520);
+      M.announce('碰' + E.fullNameOfId(tile), true);
     } else {
       note(s, 'PON', 1300, s.segments[0]);
     }
@@ -1574,7 +1584,7 @@
         w: W, h: H,
         cell: cell,
         field: game.field.map(function (f) {
-          return { x: f.x, y: f.y, tile: E.labelOfId(f.tile), name: E.fullNameOfId(f.tile) };
+          return { x: f.x, y: f.y, tile: E.labelOfId(f.tile), name: E.fullNameOfId(f.tile), id: f.tile };
         }),
         winner: game.winner ? game.winner.def.name : null,
         huForm: game.huForm, doubleHu: game.doubleHu,
@@ -1588,6 +1598,7 @@
         snakes: game.snakes.map(function (s) {
           return {
             id: s.id, state: s.state, hand: s.hand.map(E.labelOfId), tiles: s.hand.length,
+            handIds: s.hand.slice(),
             head: s.segments[0] || null, headTile: s.hand.length ? E.labelOfId(s.hand[0]) : null,
             handKinds: s.hand.map(E.kindOf),
             seatWind: E.label(s.seatWind), seatWindKind: s.seatWind,

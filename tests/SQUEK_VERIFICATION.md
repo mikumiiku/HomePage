@@ -163,3 +163,16 @@
 - 提交只包含本任务的文件：DESIGN.md 里我的那段与斗地主的段落是两个独立 hunk，用 `git apply --cached` 只暂存了自己那一块；README.md / schemas.js / games.go 等含别人改动的文件一律没动。
 
 发布后核对：8023 监听、新进程 PID 875877；`/healthz`、`/`、`/games/`、`/game/squek`、`/game/doudizhu` 均 200；雀蛇资源带新指纹（1789994126），线上 `squek.js` 里能取到 `ponCandidates` / `seatWind`、`squek-engine.js` 里能取到 `openKinds`。线上浏览器冒烟（全新上下文）：点开始后四家自风是东南西北各一个且标在状态牌上、开局说明含「东风局 / 碰 / 役」、点 READY 后正常进 PLAYING，console 与 pageerror 为 0。
+
+## 2026-09-21 第九轮调整：修「打什么、场上就补回什么」
+
+用户反馈：吃牌出牌之后，场上刷新的牌就是刚打出的那张。
+
+根因不是没洗牌——`makeWall` 一直是 Fisher-Yates 洗好的。问题在**回收与抽取的方向**：`doDiscard` 用 `game.pool.push(tile)` 把打出的牌放到牌库末尾，而 `spawnFieldTile` 用 `game.pool.pop()` 从末尾取牌，后进先出，于是下一张补场必然又是它。
+
+- 补场改成「**补满四张**」：`spawnFieldTile` 循环补到 `FIELD_TILES`，单张落位拆成 `placeFieldTile`。吃牌时场上少一张就补一张；**碰是从牌库取牌、场上没少，这时不补**——否则会涨到五张（这是修上面那条时连带发现的第二个 bug：碰完再弃牌会把场上撑到 5 张，之前一直存在，只是没人注意）。
+- 弃牌顺序改成「**先补场、再洗回牌库**」：`spawnFieldTile()` 抽的是牌库里的既有牌，绝不可能抽到刚打出的那张；随后 `recycleTile(tile)` 把它**插到牌库随机位置**，之后才可能被重新抽到。撞死时整手牌回牌库也走同一个 `recycleTile`。
+- 碰的认领对象从「场上那条记录」改成「牌库里那张牌」：打出的牌本来就不在场上，没人碰就自然成为牌库的一部分，有人碰就从牌库取出来给他，不需要额外的占位标记——`fieldAt` 里那个 `f.claim` 特例也一并删掉了。牌张守恒因此是自然成立的，不用为「预留」额外记账。
+- 调试快照 `state()` 补了 `field[].id` 与 `snakes[].handIds`（同一张牌的不同副本以前在快照里分不出来，没法精确断言）。
+
+验证：`python3 tests/squek_test.py` 21 组通过，弃牌用例新增两条断言——打出的那张 id 不在补场后的场上、场上不超过四张；「场上牌数 = 4 − 选牌中的蛇数」这条旧断言改成区间（碰不走场上，所以这个等式不再成立）。另用一次性脚本连续观察 6 次弃牌，刚打出的牌一次都没回到场上，牌张守恒 136。长跑 80 秒（强制电脑能碰就碰）确认碰仍正常、场上从不超过四张、无重复明刻、无 console 错误。`node tests/squek_engine_test.cjs` 22 项、`node tests/squek_ai_test.cjs` 9 项、`go test ./...`、`python3 tests/game_layout_test.py` 47 组全部通过。
