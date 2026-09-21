@@ -133,3 +133,9 @@
 - 存档：squek 槽位 version 1 → 2，`best.score`（最高得点）与 `stats.points`（累计得点），migrations 登记 v1→v2 补齐；`bestText` 改成「胡牌 n 局 · 最高 m 点」。
 
 回归：`node tests/squek_engine_test.cjs` 18 项通过（新增 8 项：通常役三组、役满明细、符与进位、点数表、高点法、摘要文本与不和判定）；`node tests/squek_ai_test.cjs` 9 项、`go test ./...`、`python3 tests/game_layout_test.py` 47 组通过。`python3 tests/squek_test.py` 18 组通过（胡牌用例改注入 `scoreHand` 桩并断言番种/番符点/纪录写入/HUD 显示；新增老存档 v1→v2 迁移用例）。顺手修了抢牌用例的固有抖动：电脑先胡牌时改成重开一局继续抢，不再直接判失败。
+
+## 第七轮发布状态
+
+2026-09-21 用户授权后发布：提交 `612234e` 后编译，产物先落 `bin/homepage.new` 再 rename 换入，发布前二进制备份在 `/tmp/homepage-before-round7`；重启走 `systemctl restart homepage-panel-launch`。
+
+发布后核对：8023 监听、新进程 PID 862144；`/healthz`、`/`、`/games/`、`/game/squek` 均 200；雀蛇四个资源带新指纹（1789983512）；线上 `squek.js` 与 `squek-engine.js` 里都能取到 `scoreHand`，确认计分代码已上线。
