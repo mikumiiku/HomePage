@@ -29,25 +29,61 @@
   function profileOf(name) { return PROFILES[name] || PROFILES.normal; }
   function personalityOf(id) { return PERSONALITIES[id] || PERSONALITIES.cpu1; }
 
-  /* 麻将价值：向听前进一歩 100 分，直接和牌 10000 分；
-     别人越需要这张牌，干扰型越想抢（设计文档第 39 节 CPU.03）。 */
+  /* 麻将价值：向听前进一歩 100 分，做出役的和牌 10000 分；
+     别人越需要这张牌，干扰型越想抢（设计文档第 39 节 CPU.03）。
+     无役不能和之后，光成牌型不算赢，还要算这张牌对做役的价值。 */
   function tileValue(view, kind) {
     var p = view.personality;
     var hand = view.self.hand;
     var probe = hand.concat([E.tileOf(kind, 0)]);
-    if (E.winForm(probe)) return 10000;
+    /* 先用便宜的牌型判定筛一道，只有真成牌型才去算番（算番要枚举拆法，很贵）。 */
+    if (E.winForm(probe)) {
+      var win = E.canWin(probe, kind, view.opts);
+      if (win) return 10000 + Math.min(2000, win.points / 20);
+      /* 成牌型但无役：按规则不能和，当成普通牌继续评估。 */
+    }
     var gain = E.tileGain(hand, kind);
     var special = specialBonus(hand, kind);
+    var yaku = E.yakuWorth(hand, kind, view.opts);
     var maxOpp = 0;
     for (var i = 0; i < view.opponents.length; i++) {
       var g = E.tileGain(view.opponents[i], kind);
       if (g > maxOpp) maxOpp = g;
     }
-    var score = 100 * gain * p.value + 30 * special;
+    var score = 100 * gain * p.value + 30 * special + 8 * yaku;
     score += 100 * maxOpp * p.denial;
     if (gain > 0 && maxOpp > 0) score += 120 * p.contest;
     if (score <= 0) score = 22 * p.roam;
     return score;
+  }
+  /* 碰完这手还有没有役的苗头：断幺九、一色系、对对和。 */
+  function ponKeepsYaku(hand, kind) {
+    var all = hand.concat([kind, kind, kind]);
+    var suit = {}, honor = false, orphans = 0;
+    for (var i = 0; i < all.length; i++) {
+      if (E.isHonor(all[i])) honor = true;
+      else suit[(all[i] / 9) | 0] = 1;
+      if (E.isOrphan(all[i])) orphans++;
+    }
+    if (orphans === 0) return true;                             // 断幺九
+    if (Object.keys(suit).length <= 1) return true;             // 混一色 / 清一色
+    var c = E.countKinds(hand), sets = 0;
+    for (var k = 0; k < E.KINDS; k++) if (c[k] >= 2) sets++;
+    return sets >= 4;                                           // 对对和的苗头
+  }
+  /* 要不要碰：役牌必碰（碰完立刻有役）；其余的只在碰完还有役、且不亏向听时碰。 */
+  function wantsPon(view, kind) {
+    var hand = view.self.hand;
+    if (E.yakuhaiHan(kind, view.opts)) return true;
+    var probe = hand.slice(), removed = 0;
+    for (var i = 0; i < probe.length && removed < 2; i++) {
+      if (E.kindOf(probe[i]) !== kind) continue;
+      probe.splice(i, 1); i--; removed++;
+    }
+    if (removed < 2) return false;
+    if (E.shanten(probe) > E.shanten(hand)) return false;       // 碰了反而退步就不碰
+    if (!ponKeepsYaku(probe, kind)) return false;               // 碰完会变成无役牌型
+    return true;
   }
   /* 特殊牌型潜力：对子多时看七对，幺九多时看十三幺。 */
   function specialBonus(hand, kind) {
@@ -187,8 +223,8 @@
   }
 
   /* 弃牌：引擎给出「打出哪张最不亏」，抢牌型偶尔留一张高价进张。 */
-  function chooseDiscard(hand, seen, personality) {
-    var order = E.discardOrder(hand, seen);
+  function chooseDiscard(hand, seen, personality, opts) {
+    var order = E.discardOrder(hand, seen, opts);
     if (!order.length) return -1;
     var p = personality || PERSONALITIES.cpu1;
     if (p.style === '抢牌' && hand.length > 1 && Math.random() < 0.15) return order[Math.min(1, order.length - 1)];
@@ -202,7 +238,7 @@
     DIRS: DIRS, PERSONALITIES: PERSONALITIES, PROFILES: PROFILES,
     profileOf: profileOf, personalityOf: personalityOf,
     tileValue: tileValue, buildGrid: buildGrid, bfs: bfs,
-    chooseMove: chooseMove, chooseDiscard: chooseDiscard
+    chooseMove: chooseMove, chooseDiscard: chooseDiscard, wantsPon: wantsPon
   };
   root.SquekAI = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

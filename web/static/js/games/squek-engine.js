@@ -199,7 +199,28 @@
     return total;
   }
   /* 手里 14 张时，逐张评估打出去之后的向听与有效牌。index 为手牌下标。 */
-  function discardRanking(hand, seen) {
+  /* —— 弃牌评分 ——
+     无役不能和之后，「打掉哪张最不亏」不能只看向听与有效牌：还要看这张牌
+     是不是做役的本钱（役牌对子、断幺九的中张、一色苗头上的同花牌）。 */
+  function yakuWorth(hand, kind, opts) {
+    var ctx = windCtx(opts);
+    var c = countKinds(hand), k, worth = 0;
+    if (yakuhaiHan(kind, ctx)) worth += c[kind] >= 2 ? 30 : 12;
+    var orphans = 0, total = 0, suits = [0, 0, 0];
+    for (k = 0; k < KINDS; k++) {
+      if (!c[k]) continue;
+      if (isOrphanKind(k)) orphans++;
+      if (k < 27) { suits[(k / 9) | 0] += c[k]; total += c[k]; }
+    }
+    if (!isOrphanKind(kind) && orphans <= 2) worth += 6;      // 手牌干净，断幺九有戏
+    if (kind < 27) {
+      if (total && suits[(kind / 9) | 0] / total >= 0.7) worth += 8;
+    } else if (total && Math.max(suits[0], suits[1], suits[2]) / total >= 0.7) {
+      worth += 4;                                             // 一色苗头时字牌也有用
+    }
+    return worth;
+  }
+  function discardRanking(hand, seen, opts) {
     var c = countKinds(hand);
     var out = [], done = {};
     for (var i = 0; i < hand.length; i++) {
@@ -210,19 +231,20 @@
       var left = shantenOfCounts(c);
       var accept = ukeire(c, seen);
       c[kind]++;
-      out.push({ kind: kind, name: fullName(kind), shanten: left, ukeire: accept });
+      out.push({ kind: kind, name: fullName(kind), shanten: left, ukeire: accept, worth: yakuWorth(hand, kind, opts) });
     }
-    /* 向听优先，其次有效牌；同分时优先打掉字牌与孤张（种类序号大者靠后）。 */
+    /* 向听优先；同向听时打「有效牌 + 役种价值」最低的那张。 */
     out.sort(function (a, b) {
       if (a.shanten !== b.shanten) return a.shanten - b.shanten;
-      if (a.ukeire !== b.ukeire) return b.ukeire - a.ukeire;
+      var av = a.ukeire + a.worth, bv = b.ukeire + b.worth;
+      if (av !== bv) return av - bv;
       return b.kind - a.kind;
     });
     return out;
   }
   /* 按手牌下标给出「打掉它有多亏」的排序（越靠前越该打）。 */
-  function discardOrder(hand, seen) {
-    var rank = discardRanking(hand, seen);
+  function discardOrder(hand, seen, opts) {
+    var rank = discardRanking(hand, seen, opts);
     var order = [], used = {};
     rank.forEach(function (row) {
       for (var i = 0; i < hand.length; i++) {
@@ -236,34 +258,39 @@
     return order;
   }
   /* 只看「打出哪张最不亏」的牌面（AI 与自动弃牌用）。 */
-  function worstTile(hand, seen) {
-    var order = discardOrder(hand, seen);
+  function worstTile(hand, seen, opts) {
+    var order = discardOrder(hand, seen, opts);
     var kind = kindOf(hand[order[0]]);
     /* 返回该种类里最靠右的那张，保证多次调用结果稳定。 */
     var pick = -1;
     for (var i = 0; i < hand.length; i++) if (kindOf(hand[i]) === kind) pick = i;
     return { index: pick, kind: kind, name: fullName(kind) };
   }
-  /* 场上某张牌对当前手牌的提示等级：2 = 直接和牌，1 = 前进一歩，0 = 无关。 */
-  function hazard(hand, kind) {
+  /* 场上某张牌对当前手牌的提示等级：2 = 有役能直接和牌，1 = 前进一歩，0 = 无关。
+     opts 同 scoreHand（场风 / 自风 / 明刻），省缺表示无风无碰。 */
+  function hazard(hand, kind, opts) {
     var probe = hand.slice();
     probe.push(tileOf(kind, 0));
-    if (winForm(probe)) return 2;
+    if (canWin(probe, kind, opts)) return 2;
     return tileGain(hand, kind) >= 1 ? 1 : 0;
   }
 
   /* ============================================================
    * 番种与符点
    *
-   * 规则口径（本游戏没有吃碰杠，手牌恒为门前清）：
-   *  - 役牌只有三元牌（中 31 / 发 32 / 白 33）：没有场风与自风，东南西北不做役牌。
-   *  - 刻子一律按暗刻计符（牌是自己在场上捡的）；四个刻子按日麻记四暗刻役满。
+   * 规则口径（东风局；没有吃，但可以碰）：
+   *  - 场风固定东；自风每局在四家里随机分配。役牌 = 三元牌 / 场风 / 自风，
+   *    每个 1 番，场风与自风重合（连风）记 2 番。
+   *  - 手里没碰过时恒为门前清，碰出来的刻子记明刻：明刻不参与三暗刻与四暗刻，
+   *    碰过之后平和 / 一杯口 / 二杯口 / 七对子不成立，三色同顺、一气通贯、
+   *    混全带幺九、纯全带幺九、混一色、清一色的番数降到副露口径。
    *  - 没有自摸与荣和的区分，因此不设门前清自摸和，也不计门清荣和加符，
-   *    直接给一个固定的门清 10 符——否则每次和牌都至少一番，无役就失去意义。
-   *  - 无役也能和，记 0 番、底和 1000 点（日麻里无役不能和，这条是本游戏的自定）。
+   *    门前清直接给一个固定的 10 符。
+   *  - 无役不能和：scoreHand 仍会返回 0 番的结果供界面解释，由调用方按 han > 0 判定。
    *  - 多个役满同时成立时不叠加，统一按一个役满 32000 点计。
    * ============================================================ */
-  var YAKUHAI_FROM = 31;                        // 中发白
+  var DRAGON_FROM = 31;                         // 中 发 白
+  var WIND_FROM = 27, WIND_TO = 30;             // 东 南 西 北
   var GREEN = { 19: 1, 20: 1, 21: 1, 23: 1, 25: 1, 32: 1 };   // 2/3/4/6/8条 与 发
   var LIMITS = [
     { han: 13, name: '役满', base: 8000 },
@@ -272,9 +299,34 @@
     { han: 6, name: '跳满', base: 3000 },
     { han: 5, name: '满贯', base: 2000 }
   ];
-  function isYakuhaiKind(kind) { return kind >= YAKUHAI_FROM; }
+  function isDragon(kind) { return kind >= DRAGON_FROM; }
+  function isWind(kind) { return kind >= WIND_FROM && kind <= WIND_TO; }
   function isOrphanKind(kind) { return isHonor(kind) || isTerminal(kind); }
   function runRank(start) { return start % 9 + 1; }
+
+  /* 场风 / 自风 / 明刻（碰出来的刻子）。roundWind 固定东，seatWind 每局随机分配，
+     没有风时传 -1。openKinds 里每出现一个种类，就有一个该种类的刻子按明刻计。 */
+  var NO_WIND = -1;
+  function windCtx(opts) {
+    opts = opts || {};
+    var seat = opts.seatWind === undefined ? NO_WIND : opts.seatWind;
+    var field = opts.roundWind === undefined ? NO_WIND : opts.roundWind;
+    return { seatWind: seat, roundWind: field, openKinds: opts.openKinds || [], open: (opts.openKinds || []).length > 0 };
+  }
+  /* 某个种类的牌作役牌时的番数：三元牌 1 番；场风与自风各 1 番，两个都是（连风）记 2 番。 */
+  function yakuhaiHan(kind, ctx) {
+    if (isDragon(kind)) return 1;
+    if (!isWind(kind)) return 0;
+    var seat = ctx.seatWind === kind, field = ctx.roundWind === kind;
+    if (seat && field) return 2;
+    return (seat || field) ? 1 : 0;
+  }
+  /* 役牌雀头的符：三元 +2；场风或自风 +2，连风 +4。 */
+  function yakuhaiPairFu(kind, ctx) {
+    if (isDragon(kind)) return 2;
+    if (!isWind(kind)) return 0;
+    return (ctx.seatWind === kind ? 2 : 0) + (ctx.roundWind === kind ? 2 : 0);
+  }
 
   /* —— 拆成「四面子 + 一雀头」的全部拆法 ——
      面子写成 {run:true, start}（顺子）或 {run:false, kind}（刻子）。 */
@@ -349,21 +401,36 @@
     return extra === 1;
   }
 
-  /* 单套「四面子 + 一雀头」的役与符。winKind 是和牌张的种类。 */
-  function scoreSplit(split, win, winKind) {
+  /* 单套「四面子 + 一雀头」的役与符。winKind 是和牌张的种类，ctx 是场风/自风/明刻。 */
+  function scoreSplit(split, win, winKind, ctx) {
     var melds = split.melds, pair = split.pair, i, m;
-    var kinds = [pair, pair], runs = [], triplets = [];
+    var kinds = [pair, pair], runs = [], triplets = [], tripletFu = [], tripletAnko = [], openLeft = ctx.openKinds.slice();
     for (i = 0; i < 4; i++) {
       m = melds[i];
-      if (m.run) { runs.push(m.start); kinds.push(m.start, m.start + 1, m.start + 2); }
-      else { triplets.push(m.kind); kinds.push(m.kind, m.kind, m.kind); }
+      if (m.run) {
+        runs.push(m.start);
+        kinds.push(m.start, m.start + 1, m.start + 2);
+      } else {
+        triplets.push(m.kind);
+        kinds.push(m.kind, m.kind, m.kind);
+        /* 碰过的刻子记明刻：每个种类最多只有一个刻子，所以分配是唯一的。 */
+        var at = openLeft.indexOf(m.kind);
+        var isOpen = at >= 0;
+        if (isOpen) openLeft.splice(at, 1);
+        var base = isOrphanKind(m.kind) ? 4 : 2;
+        tripletFu.push(isOpen ? base : base * 2);
+        tripletAnko.push(!isOpen);
+      }
     }
     var each = function (fn) {
       for (var j = 0; j < kinds.length; j++) if (!fn(kinds[j])) return false;
       return true;
     };
-    var windTriplets = triplets.filter(function (k) { return k >= 27 && k <= 30; });
-    var dragonTriplets = triplets.filter(isYakuhaiKind);
+    var windTriplets = triplets.filter(isWind);
+    var dragonTriplets = triplets.filter(isDragon);
+    var anko = 0;
+    for (i = 0; i < tripletAnko.length; i++) if (tripletAnko[i]) anko++;
+    var menzen = !ctx.open;
 
     /* —— 役满 —— */
     var yakuman = [];
@@ -372,9 +439,9 @@
     if (each(function (k) { return GREEN[k]; })) yakuman.push('绿一色');
     if (dragonTriplets.length === 3) yakuman.push('大三元');
     if (windTriplets.length === 4) yakuman.push('大四喜');
-    else if (windTriplets.length === 3 && pair >= 27 && pair <= 30) yakuman.push('小四喜');
-    if (triplets.length === 4) yakuman.push('四暗刻');
-    if (isNineGates(kinds)) yakuman.push('九莲宝灯');
+    else if (windTriplets.length === 3 && isWind(pair)) yakuman.push('小四喜');
+    if (anko === 4) yakuman.push('四暗刻');
+    if (menzen && isNineGates(kinds)) yakuman.push('九莲宝灯');
     if (yakuman.length) return { yakuman: yakuman };
 
     /* —— 通常役 —— */
@@ -382,29 +449,33 @@
     function add(name, h) { yaku.push({ name: name, han: h }); han += h; }
 
     if (each(function (k) { return !isOrphanKind(k); })) add('断幺九', 1);
-    if (runs.length === 4 && !isYakuhaiKind(pair) && win.name === '两面') add('平和', 1);
+    if (menzen && runs.length === 4 && yakuhaiHan(pair, ctx) === 0 && win.name === '两面') add('平和', 1);
 
     var runAt = {}, doubled = 0;
     runs.forEach(function (st) { runAt[st] = (runAt[st] || 0) + 1; });
     Object.keys(runAt).forEach(function (st) { if (runAt[st] >= 2) doubled++; });
-    if (doubled >= 2) add('二杯口', 3);
-    else if (doubled === 1) add('一杯口', 1);
+    if (menzen && doubled >= 2) add('二杯口', 3);
+    else if (menzen && doubled === 1) add('一杯口', 1);
 
     for (i = 0; i < runs.length; i++) {
       var st = runs[i];
-      if (st < 9 && runAt[st + 9] && runAt[st + 18]) { add('三色同顺', 2); break; }
+      if (st < 9 && runAt[st + 9] && runAt[st + 18]) { add('三色同顺', menzen ? 2 : 1); break; }
     }
     for (i = 0; i < 3; i++) {
-      if (runAt[i * 9] && runAt[i * 9 + 3] && runAt[i * 9 + 6]) { add('一气通贯', 2); break; }
+      if (runAt[i * 9] && runAt[i * 9 + 3] && runAt[i * 9 + 6]) { add('一气通贯', menzen ? 2 : 1); break; }
     }
     var tripletAt = {};
     triplets.forEach(function (k) { tripletAt[k] = 1; });
     for (i = 0; i < 9; i++) {
       if (tripletAt[i] && tripletAt[i + 9] && tripletAt[i + 18]) { add('三色同刻', 2); break; }
     }
-    if (triplets.length === 3) add('三暗刻', 2);
-    dragonTriplets.forEach(function (k) { add(fullName(k), 1); });
-    if (dragonTriplets.length === 2 && isYakuhaiKind(pair)) add('小三元', 2);
+    if (anko === 3) add('三暗刻', 2);
+    if (triplets.length === 4) add('对对和', 2);
+    triplets.forEach(function (k, idx) {
+      var h = yakuhaiHan(k, ctx);
+      if (h) add(fullName(k), h);
+    });
+    if (dragonTriplets.length === 2 && isDragon(pair)) add('小三元', 2);
 
     var hasHonor = !each(function (k) { return !isHonor(k); });
     var meldsAllOrphan = melds.every(function (x) {
@@ -412,17 +483,18 @@
     }) && isOrphanKind(pair);
     /* 混老头只可能出在七对子（全是幺九牌的四个刻子已经是四暗刻役满，上面就返回了）。 */
     if (meldsAllOrphan && runs.length > 0) {
-      add(hasHonor ? '混全带幺九' : '纯全带幺九', hasHonor ? 2 : 3);
+      if (hasHonor) add('混全带幺九', menzen ? 2 : 1);
+      else add('纯全带幺九', menzen ? 3 : 2);
     }
     var suits = {}, honor = 0;
     kinds.forEach(function (k) { if (isHonor(k)) honor = 1; else suits[(k / 9) | 0] = 1; });
     var suitCount = Object.keys(suits).length;
-    if (suitCount === 1 && !honor) add('清一色', 6);
-    else if (suitCount === 1 && honor) add('混一色', 3);
+    if (suitCount === 1 && !honor) add('清一色', menzen ? 6 : 5);
+    else if (suitCount === 1 && honor) add('混一色', menzen ? 3 : 2);
 
     /* —— 符：底 20 + 门清 10 + 雀头 + 面子 + 待ち —— */
-    var fu = 20 + 10 + (isYakuhaiKind(pair) ? 2 : 0) + win.fu;
-    triplets.forEach(function (k) { fu += isOrphanKind(k) ? 8 : 4; });
+    var fu = 20 + (menzen ? 10 : 0) + yakuhaiPairFu(pair, ctx) + win.fu;
+    for (i = 0; i < tripletFu.length; i++) fu += tripletFu[i];
     fu = Math.ceil(fu / 10) * 10;
     return { yaku: yaku, han: han, fu: fu };
   }
@@ -450,7 +522,8 @@
     return { yaku: yaku, han: han, fu: 25 };
   }
 
-  /* 番 + 符 → 基本点与得点（荣和口径：基本点 × 4，进位到百）。 */
+  /* 番 + 符 → 基本点与得点（荣和口径：基本点 × 4，进位到百）。
+     0 番（无役）按规则不能和，这里仍给出一个底分供界面解释。 */
   function pointsOf(han, fu) {
     if (han <= 0) return { points: 1000, limit: '' };
     for (var i = 0; i < LIMITS.length; i++) {
@@ -464,11 +537,14 @@
   }
 
   /* 和牌评分。tiles 为 14 张手牌，winKind 是和牌张的种类（省缺时取最后一张）。
-     返回 null 表示没和；否则 { form, yaku, han, fu, points, limit, yakuman }。
+     opts = { roundWind, seatWind, openKinds }，省缺表示没有风、也没有碰过的刻子。
+     返回 null 表示牌型不成和；否则 { form, yaku, han, fu, points, limit, yakuman }。
+     无役时 han 为 0——按规则不能和，由调用方按 han > 0 判定。
      十三幺 / 七对子 / 标准型都算一遍，按高点法取分最高的那套
      （例如 11223344556677m 既是七对子也是二杯口+一杯口，要取后者）。 */
-  function scoreHand(tiles, winKind) {
+  function scoreHand(tiles, winKind, opts) {
     if (tiles.length % 3 !== 2) return null;
+    var ctx = windCtx(opts);
     var counts = countKinds(tiles);
     var win = winKind === undefined ? kindOf(tiles[tiles.length - 1]) : winKind;
     var best = null;
@@ -480,10 +556,11 @@
             (cand.han === best.han && cand.fu > best.fu)))) best = cand;
     }
 
-    if (kokushiShanten(counts) === -1) {
+    /* 七对子与国士无双都是门前限定：碰过就不成立。 */
+    if (!ctx.open && kokushiShanten(counts) === -1) {
       keep(result('十三幺', [named13('国士无双')], 13, 0, true));
     }
-    var chiitoi = scoreChiitoi(counts);
+    var chiitoi = ctx.open ? null : scoreChiitoi(counts);
     if (chiitoi) {
       if (chiitoi.yakuman) keep(result('七对子', chiitoi.yakuman.map(named13), 13, 25, true));
       else keep(result('七对子', chiitoi.yaku, chiitoi.han, chiitoi.fu, false));
@@ -492,11 +569,11 @@
     for (var i = 0; i < splits.length; i++) {
       var waits = waitOptions(splits[i], win);
       for (var j = 0; j < waits.length; j++) {
-        var got = scoreSplit(splits[i], waits[j], win);
+        var got = scoreSplit(splits[i], waits[j], win, ctx);
         if (!got) continue;
         if (got.yakuman) keep(result('标准胡', got.yakuman.map(named13), 13, 0, true));
         else {
-          var yaku = got.yaku.length ? got.yaku : [{ name: '底和', han: 0 }];
+          var yaku = got.yaku.length ? got.yaku : [{ name: '无役', han: 0 }];
           keep(result('标准胡', yaku, got.han, got.fu, false));
         }
       }
@@ -513,13 +590,19 @@
     }
   }
 
-  /* 一行摘要，给界面与播报用：3 番 30 符 3900 点 / 役满 32000 点。 */
+  /* 一行摘要，给界面与播报用：3 番 30 符 3900 点 / 役满 32000 点 / 无役不能和。 */
   function scoreText(score) {
     if (!score) return '';
+    if (score.han <= 0) return '无役（不能和牌）';
     var tail = '　' + score.points + ' 点';
     if (score.yakuman) return score.limit + tail;
-    if (score.han <= 0) return '0 番 ' + score.fu + ' 符' + tail;
     return score.han + ' 番 ' + score.fu + ' 符' + tail + (score.limit ? '（' + score.limit + '）' : '');
+  }
+
+  /* 能不能和：牌型成和且有役。AI 与和牌判定都用它。 */
+  function canWin(tiles, winKind, opts) {
+    var s = scoreHand(tiles, winKind, opts);
+    return !!s && s.han > 0 ? s : null;
   }
 
   var api = {
@@ -533,6 +616,8 @@
     standardShanten: standardShanten, chiitoiShanten: chiitoiShanten, kokushiShanten: kokushiShanten,
     winForm: winForm, tileGain: tileGain, ukeire: ukeire,
     scoreHand: scoreHand, scoreText: scoreText, pointsOf: pointsOf, meldSplits: meldSplits,
+    canWin: canWin, yakuhaiHan: yakuhaiHan, isDragon: isDragon, isWind: isWind, yakuWorth: yakuWorth,
+    DRAGON_FROM: DRAGON_FROM, WIND_FROM: WIND_FROM, WIND_TO: WIND_TO,
     discardRanking: discardRanking, discardOrder: discardOrder, worstTile: worstTile, hazard: hazard
   };
   root.SquekEngine = api;

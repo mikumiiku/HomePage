@@ -71,7 +71,9 @@ test('干扰型会为别人急需的牌加价', () => {
     opponents: [hand('123m 456m 789m 123p 5s')]
   };
   const theirs = E.kindOfTile('s', 5);
-  const useless = E.kindOfTile('z', 5);
+  /* 对照牌要挑一张「役种价值与自己这边也相同」的：两张都是条子里的无对孤张，
+     对做役的贡献一样，唯一差别就是对手需不需要它。 */
+  const useless = E.kindOfTile('s', 6);
   const effTheirs = AI.tileValue(Object.assign({ personality: AI.PERSONALITIES.cpu1 }, base), theirs);
   const effUseless = AI.tileValue(Object.assign({ personality: AI.PERSONALITIES.cpu1 }, base), useless);
   assert.equal(effTheirs, effUseless, '牌效率型对两张废牌一视同仁');

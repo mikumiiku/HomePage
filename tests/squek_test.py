@@ -64,6 +64,21 @@ def hud_snapshot(page):
     raise AssertionError(('HUD 与对局状态不一致', snap))
 
 
+def settle_player(page, tries=40):
+    """玩家吃到牌会停在选牌态等真人出牌；回归里没有真人，替它打一张，回到能走的状态。"""
+    for _ in range(tries):
+        st = page.evaluate('App.squek.state()')
+        if st['phase'] != 'PLAYING':
+            return st
+        me = next(s for s in st['snakes'] if s['id'] == 'player')
+        if me['state'] == 'NORMAL' and me['head']:
+            return st
+        if me['state'] == 'DECISION' and page.locator('.sq-tile').count():
+            page.locator('.sq-tile').first.click()
+        page.wait_for_timeout(200)
+    return page.evaluate('App.squek.state()')
+
+
 def start_round(page):
     """点开始 / 再来一局之后牌会先发好停在 READY，要再点一次中间的准备按钮才进倒计时。"""
     page.wait_for_function("App.squek.state().phase === 'READY'", timeout=15000)
@@ -258,7 +273,7 @@ with sync_playwright() as p:
     # 循环边界：一直朝右走，蛇头应当从最右边跳回最左边，而且不算死亡
     wrapped = None
     for attempt in range(4):
-        page.wait_for_function("App.squek.state().snakes[0].state === 'NORMAL'", timeout=20000)
+        settle_player(page)
         prev = None
         prev_deaths = None
         for _ in range(600):
@@ -267,6 +282,9 @@ with sync_playwright() as p:
                 break
             me = st['snakes'][0]
             if me['state'] != 'NORMAL' or not me['head']:
+                # 吃到牌会停在选牌态，不替它出牌就会一直卡着，等不到绕边界
+                if me['state'] == 'DECISION':
+                    settle_player(page, tries=3)
                 prev = None
                 page.evaluate("App.squek.steer('right')")
                 page.wait_for_timeout(120)
@@ -462,6 +480,127 @@ with sync_playwright() as p:
     assert migrated['d']['settings']['difficulty'] == 'hard', migrated['d']['settings']
     results.append(dict(case='migrate', best=migrated['d']['best']))
 
+    # 自风：每局重随、四家各一个，并标在状态牌上
+    page.goto(BASE + '/game/squek', wait_until='domcontentloaded')
+    page.locator('.overlay .choices button', has_text='开始游戏').click()
+    page.wait_for_function("App.squek.state().phase === 'READY'", timeout=12000)
+    winds = page.evaluate("() => App.squek.state().snakes.map(s => s.seatWind)")
+    assert len(winds) == 4 and set(winds) == {'东', '南', '西', '北'}, ('四家自风应当正好是东南西北各一个', winds)
+    plates = page.evaluate("() => Array.from(document.querySelectorAll('.sq-plate')).map(e => e.innerText.replace(/\\n/g, ' '))")
+    for w, text in zip(winds, plates):
+        assert w + '家' in text or w in text, ('状态牌要标出自风', winds, plates)
+    results.append(dict(case='winds', seats=winds))
+    start_round(page)
+
+    # 碰：别人打出的牌自己能碰时出现认领条，点碰拿牌、记明刻、进选牌。
+    # 自然撞上「手里正好两张 + 别人正好打出这一种」只有百分之几，所以主动构造：
+    # 挑一种「玩家正好两张、且某台电脑手里也有」的牌，再把电脑的弃牌锁到这一种。
+    claim = None
+    for _ in range(6):
+        pick = page.evaluate("""() => {
+          const st = App.squek.state();
+          const cnt = (s) => { const c = {}; s.handKinds.forEach(k => c[k] = (c[k] || 0) + 1); return c; };
+          const me = cnt(st.snakes.find(x => x.id === 'player'));
+          const others = st.snakes.filter(x => x.id !== 'player').map(cnt);
+          for (const k of Object.keys(me)) {
+            if (me[k] !== 2) continue;
+            if (others.some(o => (o[k] || 0) >= 1)) return Number(k);
+          }
+          return null;
+        }""")
+        if pick is None:
+            page.goto(BASE + '/game/squek', wait_until='domcontentloaded')
+            page.locator('.overlay .choices button', has_text='开始游戏').click()
+            start_round(page)
+            continue
+        page.evaluate("""(kind) => {
+          window.__realDiscard = SquekAI.chooseDiscard;
+          SquekAI.chooseDiscard = function (hand, seen, personality, opts) {
+            for (let i = hand.length - 1; i >= 0; i--) if (SquekEngine.kindOf(hand[i]) === kind) return i;
+            return window.__realDiscard(hand, seen, personality, opts);
+          };
+        }""", pick)
+        for _ in range(120):
+            page.wait_for_timeout(250)
+            info = page.evaluate("""(kind) => {
+              const bar = document.querySelector('.sq-claim');
+              const st = App.squek.state();
+              const me = st.snakes.find(x => x.id === 'player');
+              const c = {}; me.handKinds.forEach(k => c[k] = (c[k] || 0) + 1);
+              const others = st.snakes.filter(x => x.id !== 'player')
+                .map(s => s.handKinds.filter(k => k === kind).length);
+              return {visible: !!bar && !bar.hidden, phase: st.phase, me: me.state,
+                      pair: (c[kind] || 0) === 2, cpuHas: others.some(n => n >= 1),
+                      others: st.snakes.filter(x => x.id !== 'player').map(x => x.melds)};
+            }""", pick)
+            if info['phase'] != 'PLAYING':
+                break
+            if info['me'] == 'DECISION':
+                # 把刚吃进来的牌（手牌条最右那张）打掉，保住手里这一对
+                page.locator('.sq-tile').last.click()
+                continue
+            if info['visible']:
+                assert all(m == [] for m in info['others']), ('玩家还没决定，电脑不该先碰', info)
+                # 认领窗口只有 8 秒，先抢一张截图再点，点空了就继续等
+                try:
+                    page.screenshot(path=str(OUT / '09-claim.png'))
+                    page.locator('.sq-pon').click(timeout=3000)
+                    claim = info
+                    break
+                except Exception:
+                    continue
+            # 注意这两个退出条件要放在「认领条可见」之后：电脑打出这一种的同一刻，
+            # 它手里就没有这种牌了，先判退出会在窗口刚打开时错过。
+            if not info['pair'] or not info['cpuHas']:
+                break                      # 对子或电脑手里的那几张没了，重新挑一种
+        if claim:
+            break
+        page.goto(BASE + '/game/squek', wait_until='domcontentloaded')
+        page.locator('.overlay .choices button', has_text='开始游戏').click()
+        start_round(page)
+    assert claim, '六局都没等到能碰的机会'
+    page.wait_for_timeout(300)
+    ponned = page.evaluate("""() => {
+      const me = App.squek.state().snakes.find(x => x.id === 'player');
+      return {state: me.state, melds: me.melds, tiles: me.tiles, body: me.body.length,
+              bar: (() => { const e = document.querySelector('.sq-claim'); return !!e && !e.hidden; })()};
+    }""")
+    assert ponned['melds'], ('碰完要记下明刻', ponned)
+    assert ponned['state'] == 'DECISION', ponned
+    assert ponned['tiles'] == 14 and ponned['body'] == 14, ('碰是拿进一张牌', ponned)
+    assert not ponned['bar'], ('碰完认领条要收起', ponned)
+    page.locator('.sq-tile').first.click()
+    page.wait_for_timeout(400)
+    after_pon = page.evaluate("""() => {
+      const st = App.squek.state();
+      const me = st.snakes.find(x => x.id === 'player');
+      return {state: me.state, melds: me.melds, tiles: me.tiles,
+              total: st.snakes.reduce((n, x) => n + x.tiles, 0) + st.field.length + st.pool};
+    }""")
+    assert after_pon['state'] == 'NORMAL' and after_pon['tiles'] == 13, after_pon
+    assert after_pon['melds'] == ponned['melds'], ('打出之后明刻仍要留着', after_pon)
+    assert after_pon['total'] == 136, after_pon
+    results.append(dict(case='pon', melds=after_pon['melds']))
+
+    # 无役不能和：成和但 0 番不算胡，换成有役才结束
+    page.goto(BASE + '/game/squek', wait_until='domcontentloaded')
+    page.locator('.overlay .choices button', has_text='开始游戏').click()
+    start_round(page)
+    page.evaluate("""() => {
+      window.__realScoreHand = SquekEngine.scoreHand;
+      window.__stub = (han) => () => ({
+        form: '标准胡', yaku: han ? [{ name: '断幺九', han: han }] : [{ name: '无役', han: 0 }],
+        han: han, fu: 40, points: han ? 2000 : 1000, limit: '', yakuman: false
+      });
+      SquekEngine.scoreHand = window.__stub(0);
+    }""")
+    page.wait_for_timeout(7000)
+    assert page.evaluate("() => App.squek.state().phase") == 'PLAYING', '无役的牌型不该算胡'
+    page.evaluate("() => { SquekEngine.scoreHand = window.__stub(2); }")
+    page.wait_for_function("App.squek.state().phase === 'OVER'", timeout=40000)
+    page.evaluate("() => { SquekEngine.scoreHand = window.__realScoreHand; }")
+    results.append(dict(case='no-yaku'))
+
     # 牌面贴图：34 张自托管麻将牌都要能加载。加载失败会静默退回占位画法，
     # 界面上看不出异常，所以这里逐个 Image() 探一遍。
     sheets = ['Man1', 'Man2', 'Man3', 'Man4', 'Man5', 'Man6', 'Man7', 'Man8', 'Man9',
@@ -497,4 +636,4 @@ with sync_playwright() as p:
     (OUT / 'report.json').write_text(json.dumps(dict(cases=results, errors=errors), ensure_ascii=False, indent=2))
     browser.close()
 
-print(f'PASS: 雀蛇回归 {len(results)} 个用例（发牌准备、开局、守恒、抢牌弃牌、观战、暂停、视口、设置、重开、胡牌结算与番符点、老存档迁移、牌面贴图、棋盘尺寸）')
+print(f'PASS: 雀蛇回归 {len(results)} 个用例（发牌准备、开局、守恒、抢牌弃牌、观战、暂停、视口、设置、重开、胡牌结算与番符点、老存档迁移、自风、碰、无役不能和、牌面贴图、棋盘尺寸）')

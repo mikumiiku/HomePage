@@ -198,8 +198,8 @@ test('符：暗刻、役牌雀头、待ち型与进位', () => {
   const kanchan = score('123m 234m 567m 234p 11z', 'p3');
   assert.equal(kanchan.fu, 40, '20 + 10 + 嵌张 2 = 32 进位到 40');
   assert.equal(kanchan.han, 0);
-  assert.deepEqual(names(kanchan), ['底和'], '无役也记 0 番底和');
-  assert.equal(kanchan.points, 1000, '无役底和 1000 点');
+  assert.deepEqual(names(kanchan), ['无役'], '无役要如实标出来');
+  assert.equal(kanchan.han, 0, '无役就是 0 番');
 });
 
 test('点数表：满贯及以上按档位，4 番 40 符以上并到满贯', () => {
@@ -213,7 +213,7 @@ test('点数表：满贯及以上按档位，4 番 40 符以上并到满贯', ()
   assert.deepEqual(E.pointsOf(8, 30), { points: 16000, limit: '倍满' });
   assert.deepEqual(E.pointsOf(11, 30), { points: 24000, limit: '三倍满' });
   assert.deepEqual(E.pointsOf(13, 30), { points: 32000, limit: '役满' });
-  assert.equal(E.pointsOf(0, 30).points, 1000, '无役底和');
+  assert.equal(E.pointsOf(0, 30).points, 1000, '0 番只作解释用，实际不能和');
 });
 
 test('高点法：同分取番数高的拆法', () => {
@@ -227,9 +227,77 @@ test('高点法：同分取番数高的拆法', () => {
 test('摘要文本与不和判定', () => {
   assert.equal(E.scoreText(score('123m 456m 789m 123p 55s', 'm4')), '3 番 30 符　3900 点');
   assert.equal(E.scoreText(score('111m 222m 333m 444m 55m', 'm5')), '役满　32000 点');
-  assert.equal(E.scoreText(score('123m 234m 567m 234p 11z', 'p3')), '0 番 40 符　1000 点');
+  assert.equal(E.scoreText(score('123m 234m 567m 234p 11z', 'p3')), '无役（不能和牌）');
   assert.equal(E.scoreHand(hand('123m 456m 789m 123p 5s'), E.kindOfTile('s',3)), null, '十三张不成和');
   assert.equal(score('123m 456m 789m 123p 55s', 'm4').form, E.winForm(hand('123m 456m 789m 123p 55s')));
+});
+
+/* 场风东，自风按参数给；open 是碰过的种类（明刻）。 */
+function opt(seat, open) {
+  return { roundWind: E.kindOfTile('z', 1), seatWind: E.kindOfTile('z', seat), openKinds: open || [] };
+}
+
+test('场风与自风：役牌、连风与符', () => {
+  /* 自风东：东风是连风，记 2 番；三个暗刻另记三暗刻 */
+  const renfeng = E.scoreHand(hand('111z 222m 333m 456m 77p'), E.kindOfTile('p', 7), opt(1));
+  assert.deepEqual(names(renfeng), ['三暗刻', '东风']);
+  assert.equal(renfeng.yaku[1].han, 2, '连风 2 番');
+  assert.equal(renfeng.han, 4);
+  assert.equal(renfeng.fu, 50, '20 底 + 10 门清 + 8 + 4 + 4（三个暗刻）+ 2 单骑 = 48 进位 50');
+
+  /* 自风南：东记场风 1 番、南记自风 1 番 */
+  const two = E.scoreHand(hand('111z 222z 333m 456m 77p'), E.kindOfTile('p', 7), opt(2));
+  assert.deepEqual(names(two), ['三暗刻', '东风', '南风']);
+  assert.equal(two.han, 4);
+
+  /* 自风北：南风刻子既不是场风也不是自风，不算役牌，这手因此无役 */
+  const none = E.scoreHand(hand('222z 111p 123m 456m 77m'), E.kindOfTile('m', 4), opt(4));
+  assert.deepEqual(names(none), ['无役'], '非场风非自风的风牌刻子不是役牌');
+  assert.equal(none.han, 0);
+
+  /* 雀头是连风（东家东风局）时符 +4 */
+  const pairFu = E.scoreHand(hand('123m 456m 789m 234p 11z'), E.kindOfTile('p', 4), opt(1));
+  assert.equal(pairFu.fu, 40, '20 + 10 + 连风雀头 4 + 两面 0 = 34 进位 40');
+});
+
+test('碰（明刻）：役牌照算，四暗刻退成三暗刻 + 对对和', () => {
+  const menzen = E.scoreHand(hand('111m 999m 333p 555z 77z'), E.kindOfTile('z', 7), opt(2));
+  assert.equal(menzen.yakuman, true);
+  assert.deepEqual(names(menzen), ['四暗刻']);
+
+  /* 碰了 1m：1m 记明刻，四暗刻不再成立，改记三暗刻 + 对对和 */
+  const ponned = E.scoreHand(hand('111m 999m 333p 555z 77z'), E.kindOfTile('z', 7),
+    opt(2, [E.kindOfTile('m', 1)]));
+  assert.equal(ponned.yakuman, false);
+  assert.deepEqual(names(ponned), ['三暗刻', '对对和', '红中']);
+  assert.equal(ponned.han, 5);
+  assert.equal(ponned.fu, 50, '20 底 + 明刻 1m 4 + 暗刻 9m 8 + 暗刻 3p 4 + 暗刻 中 8 + 单骑 2 = 46 进位 50');
+});
+
+test('碰之后门清限定的役不成立、番数降到副露口径', () => {
+  const open = [E.kindOfTile('m', 2)];
+  const menzen = E.scoreHand(hand('123m 234m 345m 456m 77m'), E.kindOfTile('m', 5), opt(2));
+  const ponned = E.scoreHand(hand('123m 234m 345m 456m 77m'), E.kindOfTile('m', 5), opt(2, open));
+  assert.deepEqual(names(menzen), ['平和', '清一色'], '门清时平和 + 清一色 6 番');
+  assert.deepEqual(names(ponned), ['清一色'], '碰过之后平和不成立');
+  assert.equal(ponned.yaku[0].han, 5, '清一色降到副露的 5 番');
+
+  const qidui = E.scoreHand(hand('11223344556677m'), E.kindOfTile('m', 7), opt(2, [E.kindOfTile('m', 1)]));
+  assert.notEqual(qidui.form, '七对子', '碰过不可能再是七对子');
+});
+
+test('无役不能和：canWin 只在有役时给结果', () => {
+  const yakuless = hand('123m 234m 567m 234p 11z');
+  const winKind = E.kindOfTile('p', 3);
+  const shape = E.scoreHand(yakuless, winKind, opt(2));
+  assert(shape, '牌型本身是成和的');
+  assert.equal(shape.han, 0);
+  assert.equal(E.canWin(yakuless, winKind, opt(2)), null, '无役不能和');
+
+  const yaku = hand('123m 456m 789m 123p 55s');
+  assert(E.canWin(yaku, E.kindOfTile('m', 4), opt(2)), '有役就能和');
+  assert.equal(E.canWin(yaku, E.kindOfTile('m', 4), opt(2)).han, 3);
+  assert.equal(E.canWin(hand('123m 456m 789m 123p 5s'), E.kindOfTile('s', 3), opt(2)), null, '不成和');
 });
 
 console.log('PASS: ' + count + ' engine cases');

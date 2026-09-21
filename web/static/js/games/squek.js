@@ -22,6 +22,9 @@
   var AREA_MIN = 324, AREA_MAX = BASE_W * BASE_H;
   var W = BASE_W, H = BASE_H;         // 当前对局的地图格数，开局由 chooseBoard 决定
   var BODY = 13;                      // 起手身长（= 手牌张数）
+  var ROUND_WIND = 27;                // 东风局：场风固定东
+  var SEAT_WINDS = [27, 28, 29, 30];  // 东南西北，每局随机分给四家
+  var CLAIM_MS = 8000;                // 碰的认领窗口
   var FIELD_TILES = 4;                // 场上常驻麻将数
   var BASE_STEP = 360;                // 毫秒 / 格
   var SUDDEN_AT = 480;                // 8 分钟后进入终局（秒）
@@ -96,6 +99,28 @@
   readyBtn.setAttribute('aria-label', '手牌已发好，点这里开始倒计时');
   readyBtn.hidden = true;
   frame.appendChild(readyBtn);
+  /* 碰的认领条：别的蛇打出牌、而你能碰时浮在棋盘底部（绝对定位，不挤动棋盘尺寸）。 */
+  var claimBar = document.createElement('div');
+  claimBar.className = 'sq-claim';
+  claimBar.hidden = true;
+  claimBar.setAttribute('role', 'group');
+  var claimText = document.createElement('span');
+  claimText.className = 'sq-claim-text';
+  var claimTimer = document.createElement('span');
+  claimTimer.className = 'sq-claim-timer';
+  var ponBtn = document.createElement('button');
+  ponBtn.type = 'button';
+  ponBtn.className = 'sq-pon';
+  ponBtn.textContent = '碰';
+  var passBtn = document.createElement('button');
+  passBtn.type = 'button';
+  passBtn.className = 'sq-pass';
+  passBtn.textContent = '不碰';
+  claimBar.appendChild(claimText);
+  claimBar.appendChild(claimTimer);
+  claimBar.appendChild(ponBtn);
+  claimBar.appendChild(passBtn);
+  frame.appendChild(claimBar);
   var bar = document.createElement('div');
   bar.className = 'sq-bar';
   var barHead = document.createElement('div');
@@ -299,7 +324,9 @@
   }
   function fieldAt(x, y) {
     for (var i = 0; i < game.field.length; i++) {
-      if (game.field[i].x === x && game.field[i].y === y) return game.field[i];
+      var f = game.field[i];
+      /* 正在等认领的牌先留给碰的人，蛇不能直接吃掉。 */
+      if (!f.claim && f.x === x && f.y === y) return f;
     }
     return null;
   }
@@ -351,7 +378,7 @@
   }
   /* 场上补牌：只放合法空白格，避开蛇头前方两格，并尽量与已有麻将拉开距离（第 13 节）。 */
   function spawnFieldTile() {
-    if (!game.pool.length) return;
+    if (!game.pool.length) return null;
     var occ = occupancy(), x, y;
     var heads = [];
     for (var i = 0; i < game.snakes.length; i++) {
@@ -383,9 +410,11 @@
       }
     }
     var pool = level3.length ? level3 : level2.length ? level2 : level1;
-    if (!pool.length) return;
+    if (!pool.length) return null;
     var spot = pickOne(pool);
-    game.field.push({ tile: game.pool.pop(), x: spot.x, y: spot.y, hint: 0 });
+    var entry = { tile: game.pool.pop(), x: spot.x, y: spot.y, hint: 0 };
+    game.field.push(entry);
+    return entry;
   }
 
   function newGame() {
@@ -396,13 +425,21 @@
     game.doubleHu = false; game.speed = 1; game.countdownEnd = 0; game.overAt = 0;
     game.gold = GOLD_MS;
     flights = []; pendingDirs = []; viewing = 'player'; crashed = 0; barSig = '';
+    claim = null; hideClaim();
     flashUntil = 0; flashText = '';
     clearTimeout(huTimer);
+    /* 自风每局重随：四家各领一个风位，配东风局就是完整的场风/自风役牌。 */
+    var seats = SEAT_WINDS.slice();
+    for (var wi = seats.length - 1; wi > 0; wi--) {
+      var wj = rndInt(wi + 1);
+      var tmp = seats[wi]; seats[wi] = seats[wj]; seats[wj] = tmp;
+    }
     PLAYERS.forEach(function (def, index) {
       game.snakes.push({
         id: def.id, index: index, def: def, human: def.human,
         state: 'DEAD', ghost: true, dir: DIRS.right,
         segments: [], prev: [], hand: E.sortHand(wall.slice(at, at + BODY)),
+        seatWind: seats[index], melds: [],
         invincibleUntil: 0, deathCount: 0, discardDeadline: 0, decisionStart: 0,
         aiNextThink: 0, respawnAt: 0, crash: null
       });
@@ -487,6 +524,7 @@
       w: W, h: H,
       self: { head: s.segments[0], dir: s.dir, body: s.segments, hand: s.hand },
       snakes: others, opponents: opponents,
+      opts: scoreOpts(s),
       tiles: game.field.map(function (f) { return { x: f.x, y: f.y, kind: E.kindOf(f.tile) }; }),
       personality: AI.personalityOf(s.id),
       profile: AI.profileOf(settings.difficulty)
@@ -544,8 +582,9 @@
     var winners = [];
     plans.forEach(function (p) {
       if (!p.ate) return;
-      var score = E.scoreHand(p.s.hand.concat([p.eat.tile]), E.kindOf(p.eat.tile));
-      if (score) { p.win = score; winners.push(p); }
+      var score = E.scoreHand(p.s.hand.concat([p.eat.tile]), E.kindOf(p.eat.tile), scoreOpts(p.s));
+      /* 无役不能和：牌型成和但 0 番不算胡。 */
+      if (score && score.han > 0) { p.win = score; winners.push(p); }
     });
     if (winners.length) {
       winners.forEach(function (p) {
@@ -678,8 +717,104 @@
       flash('DISCARD ' + E.labelOfId(tile), 420);
       M.announce('打出' + E.fullNameOfId(tile), true);
     }
-    spawnFieldTile();
+    /* 补进场上的这张牌就是刚打出的那张：挂上认领标记，看有没有人要碰。 */
+    openClaim(s, spawnFieldTile());
     renderAll(true);
+  }
+
+  /* ============================================================
+   * 碰：打出牌之后，手里有两张同种牌的人可以认领这张牌
+   * ============================================================ */
+  var claim = null;             // { tile, kind, from, until, entry }
+  /* 手里正好两张、活着、不在选牌中、而且没碰过这一种的家才能碰。
+     要求「正好两张」是因为碰完手里就剩三张同种牌（两张加进来的那张），
+     再碰一次就成了同一副牌两个明刻；手里本来三张的属于暗刻，要补第四张是杠，本作没有。 */
+  function ponCandidates(kind, exclude) {
+    return game.snakes.filter(function (s) {
+      if (s === exclude || s.state === 'DEAD' || s.state === 'DECISION') return false;
+      for (var m = 0; m < s.melds.length; m++) if (s.melds[m].kind === kind) return false;
+      var n = 0;
+      for (var i = 0; i < s.hand.length; i++) if (E.kindOf(s.hand[i]) === kind) n++;
+      return n === 2;
+    });
+  }
+  function openClaim(from, entry) {
+    expireClaim();
+    if (!entry || !isMoving(from)) return;
+    var kind = E.kindOf(entry.tile);
+    var list = ponCandidates(kind, from);
+    if (!list.length) return;
+    var me = snakeById('player');
+    var humans = list.indexOf(me) >= 0;
+    claim = { tile: entry.tile, kind: kind, from: from, until: game.now + CLAIM_MS, entry: entry, candidates: list };
+    entry.claim = true;                       // 认领期间这张牌不能被路过吃掉
+    /* 玩家能碰就开窗口等它决定；只有电脑能碰时立刻结算，不打断节奏。 */
+    if (humans) {
+      showClaim(from, kind);
+      M.announce(from.def.name + '打出' + E.fullName(kind) + '，你可以碰', false);
+    } else {
+      resolveClaim(pickPonner(list, kind), false);
+    }
+  }
+  /* 电脑按性格判断要不要碰；按座位顺序取第一个愿意碰的。 */
+  function pickPonner(list, kind) {
+    for (var i = 0; i < list.length; i++) {
+      var s = list[i];
+      if (s.human) continue;
+      if (AI.wantsPon(aiView(s), kind)) return s;
+    }
+    return null;
+  }
+  /* 结算认领。ponner 直接指定谁碰；没指定且 allowAi 时按座位顺序问电脑。
+     玩家放弃（点不碰或窗口超时）走的就是 allowAi —— 这正是「玩家优先」那条规则。 */
+  function resolveClaim(ponner, allowAi) {
+    if (!claim) return;
+    var c = claim;
+    claim = null;
+    hideClaim();
+    var taker = ponner;
+    if (!taker && allowAi) taker = pickPonner(c.candidates, c.kind);
+    if (taker && c.entry && game.field.indexOf(c.entry) >= 0 &&
+        ponCandidates(c.kind, c.from).indexOf(taker) >= 0) {
+      ponTile(taker, c.entry);
+      spawnFieldTile();
+    } else if (c.entry) {
+      c.entry.claim = false;
+    }
+    renderAll(true);
+  }
+  function expireClaim() {
+    if (claim) resolveClaim(null, true);
+  }
+  /* 认领条：只在自己能碰的时候出现，不抢焦点（玩家正在用方向键控蛇）。 */
+  function showClaim(from, kind) {
+    claimText.textContent = from.def.name + ' 打出 ' + E.fullName(kind);
+    ponBtn.setAttribute('aria-label', '碰' + E.fullName(kind));
+    claimTimer.textContent = Math.round(CLAIM_MS / 1000) + 's';
+    claimBar.hidden = false;
+  }
+  function hideClaim() { claimBar.hidden = true; }
+  /* 碰：身体长一节、拿进这张牌、记一个明刻，然后进入选牌。 */
+  function ponTile(s, entry) {
+    var at = game.field.indexOf(entry);
+    if (at >= 0) game.field.splice(at, 1);
+    growTail(s);
+    s.hand.unshift(entry.tile);
+    s.melds.push({ kind: E.kindOf(entry.tile) });
+    s.prev = cloneCells(s.segments);
+    s.state = 'DECISION';
+    s.ghost = true;
+    s.deathCount = 0;
+    s.decisionStart = game.now;
+    s.discardDeadline = s.human ? 0 : game.now + AI_DISCARD_MS + rndInt(300);
+    if (s.human) {
+      viewing = 'player';
+      sfx.eat();
+      flash('PON ' + E.labelOfId(entry.tile), 520);
+      M.announce('碰' + E.fullNameOfId(entry.tile), true);
+    } else {
+      note(s, 'PON', 1300, s.segments[0]);
+    }
   }
 
   function seenCounts() {
@@ -691,17 +826,28 @@
   function playerDiscardIndex() {
     var s = snakeById('player');
     if (!s || s.hand.length !== BODY + 1) return -1;
-    var worst = E.worstTile(s.hand, seenCounts());
+    var worst = E.worstTile(s.hand, seenCounts(), scoreOpts(s));
     return worst.index >= 0 ? worst.index : s.hand.length - 1;
+  }
+  /* 计分口径：东风局（场风固定东）+ 这家的自风 + 它碰出来的明刻。 */
+  function scoreOpts(s) {
+    return {
+      roundWind: ROUND_WIND,
+      seatWind: s.seatWind,
+      openKinds: s.melds.map(function (m) { return m.kind; })
+    };
   }
   function markHazard() {
     var player = snakeById('player');
     var hand = settings.hint && player && player.hand.length === BODY ? player.hand : null;
-    game.field.forEach(function (f) { f.hint = hand ? E.hazard(hand, E.kindOf(f.tile)) : 0; });
+    var opts = player ? scoreOpts(player) : null;
+    game.field.forEach(function (f) { f.hint = hand ? E.hazard(hand, E.kindOf(f.tile), opts) : 0; });
   }
 
   /* 每帧计时：倒计时、终局加速、弃牌限时、重生等待。 */
   function timers(dt) {
+    /* 碰的认领窗口到点就作废：这张牌变成普通场上牌，电脑也不再等着了。 */
+    if (claim && game.now >= claim.until) resolveClaim(null, true);
     if (game.phase === 'COUNTDOWN') {
       if (game.now >= game.countdownEnd) game.phase = 'PLAYING';
       return;
@@ -720,7 +866,7 @@
           if (game.gold <= 0) doDiscard(s, playerDiscardIndex());
         }
       } else if (s.state === 'DECISION' && s.discardDeadline && game.now >= s.discardDeadline) {
-        doDiscard(s, AI.chooseDiscard(s.hand, seenCounts(), AI.personalityOf(s.id)));
+        doDiscard(s, AI.chooseDiscard(s.hand, seenCounts(), AI.personalityOf(s.id), scoreOpts(s)));
       } else if (s.state === 'DEAD' && !s.segments.length && game.now >= s.respawnAt) {
         if (s.crash && game.now >= s.crash.until) s.crash = null;
         respawn(s);
@@ -732,6 +878,7 @@
   function endGame() {
     game.phase = 'OVER';
     game.overAt = game.now;
+    expireClaim();
     sfx.hu();
     var playerWon = game.winners.some(function (s) { return s.human; });
     var seconds = Math.round(game.time);
@@ -767,7 +914,9 @@
     var playerWon = game.winners.some(function (s) { return s.human; });
     var lines = [];
     game.winners.forEach(function (s) {
-      lines.push(s.def.name + '：' + E.sortHand(s.hand).map(E.fullNameOfId).join(' '));
+      var pon = s.melds.length ? ' 碰 ' + s.melds.map(function (m) { return E.fullName(m.kind); }).join(' ') : '';
+      lines.push(s.def.name + '（' + E.fullName(s.seatWind).replace('风', '') + '家）' + pon + '：' +
+        E.sortHand(s.hand).map(E.fullNameOfId).join(' '));
       lines.push('　' + s.score.yaku.map(function (y) { return y.name; }).join('・') +
         '　' + E.scoreText(s.score));
     });
@@ -1011,17 +1160,30 @@
   }
   function shantenText(s) {
     var n = E.shanten(s.hand);
-    return n <= 0 ? 'TENPAI' : n + '-SHANTEN';
+    if (n > 0) return n + '-SHANTEN';
+    /* 听牌也可能无役：无役不能和，所以这里得说清楚，否则玩家会以为和不了是 bug。 */
+    return hasYakuWin(s) ? 'TENPAI' : 'NO YAKU';
+  }
+  /* 这一手有没有「摸到就成立」的役：只看当前手牌能和的那些种类。 */
+  function hasYakuWin(s) {
+    var c = E.countKinds(s.hand), opts = scoreOpts(s);
+    for (var k = 0; k < E.KINDS; k++) {
+      if (c[k] >= E.COPIES) continue;
+      if (E.canWin(s.hand.concat([E.tileOf(k, 0)]), k, opts)) return true;
+    }
+    return false;
   }
   function renderPlates() {
     var html = '';
     game.snakes.forEach(function (s) {
       var active = viewing === s.id;
+      var label = E.fullName(s.seatWind).replace('风', '') + '家';
       html += '<button type="button" class="sq-plate' + (active ? ' is-active' : '') +
         '" data-view="' + s.id + '" aria-pressed="' + (active ? 'true' : 'false') +
         '" style="--sq-plate:var(' + s.def.color + ')" aria-label="' +
-        s.def.name + '，' + s.hand.length + ' 张，' + stateLabel(s) + '，查看手牌">' +
-        '<span class="sq-plate-name">' + s.def.name + '</span>' +
+        label + ' ' + s.def.name + '，' + s.hand.length + ' 张，' + stateLabel(s) + '，查看手牌">' +
+        '<span class="sq-plate-name"><b class="sq-wind">' + E.label(s.seatWind) + '</b>' +
+        s.def.name + '</span>' +
         '<span class="sq-plate-state">' + stateLabel(s) + '</span></button>';
     });
     plates.innerHTML = html;
@@ -1164,6 +1326,7 @@
     flashUntil = game.now + ms;
   }
   function updateBanner() {
+    if (claim) claimTimer.textContent = Math.max(0, Math.ceil((claim.until - game.now) / 1000)) + 's';
     showReadyPrompt(game.phase === 'READY');
     if (game.phase === 'READY') { showMsg(''); return; }
     if (game.phase === 'COUNTDOWN') {
@@ -1223,6 +1386,8 @@
     doDiscard(s, Number(button.dataset.index));
   });
   readyBtn.addEventListener('click', beginCountdown);
+  ponBtn.addEventListener('click', function () { resolveClaim(snakeById('player'), false); });
+  passBtn.addEventListener('click', function () { resolveClaim(null, true); });
   plates.addEventListener('click', function (event) {
     var button = event.target.closest('button[data-view]');
     if (!button) return;
@@ -1291,13 +1456,17 @@
   function showStart() {
     var best = G.load().data.best;
     var lines = settings.seen
-      ? ['吃牌凑成四组牌加一对牌就赢。地图上下左右是循环的，撞自己或撞到别的蛇会重生换一副手牌。',
+      ? ['吃牌凑成四组牌加一对牌，并且至少有一番才胡得了。地图上下左右是循环的，撞自己或撞到别的蛇会重生换一副手牌。',
         '场上常驻四张麻将。吃满十四张后选一张打掉：每次思考 12 银秒，不够用再扣每局共用的 30 金秒。',
-        '和牌按日麻番符算点：平和、断幺九、一气通贯、三色同顺、混一色、清一色等都有番，四暗刻、大三元、国士无双是役满；没做出役也能和，只是 0 番底和。']
+        '本局是东风局，四家自风每局重抽（看状态牌左上角）。场风东、自己的自风、中发白都是役牌。',
+        '别人打出的牌，你手里正好两张就能碰：认领条出现后 8 秒内点碰，电脑会等你先决定。',
+        '和牌按日麻番符算点：平和、断幺九、一气通贯、三色同顺、混一色、清一色等都有番；碰过就没有门清限定的役，但换来对对和。']
       : ['MOVE｜方向键 / WASD 转向，也可以在地图上滑动',
         'EAT A TILE｜蛇头碰到麻将就吃进来',
         'DISCARD ONE｜吃满十四张，点一张打掉（每次 12 银秒 + 每局 30 金秒）',
-        'MAKE A HAND｜四组牌加一对牌就能胡',
+        'MAKE A HAND｜四组牌加一对牌，而且要有役才能胡',
+        'PON｜别人打出的牌你手里正好两张，8 秒内可以碰（电脑等你先决定）',
+        'YAKU｜东风局：场风东、你的自风、中发白是役牌',
         'SCORE｜按日麻番种与符数算点，役满最大',
         'WRAP AROUND｜走出边界会从对边回来',
         'CRASH = NEW HAND｜撞到自己或别的蛇会重生并换一副手牌'];
@@ -1421,6 +1590,8 @@
             id: s.id, state: s.state, hand: s.hand.map(E.labelOfId), tiles: s.hand.length,
             head: s.segments[0] || null, headTile: s.hand.length ? E.labelOfId(s.hand[0]) : null,
             handKinds: s.hand.map(E.kindOf),
+            seatWind: E.label(s.seatWind), seatWindKind: s.seatWind,
+            melds: s.melds.map(function (m) { return E.label(m.kind); }),
             dir: { x: s.dir.x, y: s.dir.y },
             body: s.segments.map(function (c) { return { x: c.x, y: c.y }; }),
             ghost: s.ghost, invincible: isInvincible(s), deaths: s.deathCount
