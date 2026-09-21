@@ -101,3 +101,16 @@
 **重启方式记一笔**：先用 `systemd-run --unit=... ` 起临时单元调面板的 `GoProjectControl('HomePage','restart')`，面板返回「重启成功」、新进程也打印了监听日志，但进程随该临时单元的 cgroup 一起被回收，8023 随即断开。改用 README 记录的 `systemctl restart homepage-panel-launch` 包装服务后恢复（新进程 PID 857108）。**以后发布直接用包装服务，不要用 systemd-run 临时单元调 restart。**
 
 发布后核对：`/healthz` 200；`/`、`/games/`、`/game/squek` 均 200；雀蛇四个资源带新指纹（1789980406）；抽查 `Ton.svg` / `Haku.svg` / `Sou1.svg` / `Man1.svg` 均 200。线上浏览器冒烟（全新上下文，无本地存档）：1440×900 棋盘 36×24、格子 26；390×844 棋盘 18×22、格子 20；34 张贴图全部加载，牌张守恒 136，console 与 pageerror 为 0。
+
+## 2026-09-21 第六轮调整：开局先发牌、点 READY 再倒计时
+
+用户要求：点「开始游戏」后先把牌分配好，让用户看完手牌，再点中间的 Ready 按钮才进倒计时。
+
+- 新增 `READY` 阶段（`MENU / READY / COUNTDOWN / PLAYING / OVER`）：`newGame()` 把牌全部发好、四条蛇摆好、场上四张牌补齐，然后停在这里。`timers()` 在 `READY` 不推进任何逻辑，对局时钟 `time` 保持 0，蛇一格都不动。
+- 中央新增常驻的原生 button `.sq-ready`（`frame` 下的独立一层，只用 `hidden` 切换）：`--sq-bg` 底、`--sq-player` 字、3px 粗黑描边 + 5px 硬阴影，字号跟随横幅的 `clamp()`，四套视口都在棋盘外框内。出现时自动聚焦，键盘与读屏走原生路径，中文含义放 `aria-label`（「手牌已发好，点这里开始倒计时」）。
+- 点按钮才 `beginCountdown()`：设 `countdownEnd = now + 3000` 并进 `COUNTDOWN`。倒计时从 3.2 秒改成 3 秒、每秒一个数字，中央不再重复显示 READY（那个提示已经由按钮承担）。
+- `.sq-msg` 是 `pointer-events: none` 的纯文字层，按钮不做它的子节点，否则 `showMsg()` 的 `textContent` 赋值会连带把按钮抹掉。
+- 发牌阶段仍然可以点四家状态牌翻看别人的手牌（牌都公开），打完再看「所有蛇的牌都公开」这条规则不受影响。
+- 播报改成「新的一局：十三张手牌已发好，看完点准备开始」，点按钮后播报「倒计时开始」。
+
+回归：`python3 tests/squek_test.py` 17 组通过（新增 ready 用例：`READY` 阶段中间显示准备按钮且中央无横幅文字、场上四张、四家各十三张且身体 13 节、手牌条已摊开十三张；停 1.2 秒后仍在 `READY`、`time` 仍为 0、四家蛇头坐标未变；点按钮后 3/2/1 → GO → PLAYING）。所有点「开始游戏 / 再来一局 / 重新开始」的地方都改成经 `start_round()`（等 `READY` → 点按钮 → 等 `PLAYING`）。`go test ./...`、`python3 tests/game_layout_test.py` 47 组通过；五档视口（1440×900 / 1024×768 / 390×844 / 320×568 / 844×390）实测按钮都在棋盘外框内、命中测试落在按钮上，pageerror 为 0。

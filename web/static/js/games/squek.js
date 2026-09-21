@@ -32,7 +32,7 @@
   var INVINCIBLE_MS = 3000;
   var DEATH_WAIT = [2000, 3000, 4000, 5000];
   var CRASH_MS = 460;
-  var COUNTDOWN_MS = 3200, GO_MS = 700;
+  var COUNTDOWN_MS = 3000, GO_MS = 700;
   var HU_HOLD_MS = 1500;              // 「胡」字停留时间
   var DIRS = { left: { x: -1, y: 0 }, right: { x: 1, y: 0 }, up: { x: 0, y: -1 }, down: { x: 0, y: 1 } };
 
@@ -55,7 +55,7 @@
 
   /* —— 运行状态 —— */
   var game = {
-    phase: 'MENU',            // MENU / COUNTDOWN / PLAYING / OVER
+    phase: 'MENU',            // MENU / READY / COUNTDOWN / PLAYING / OVER
     now: 0,                   // 只在不暂停时前进的游戏时钟（毫秒）
     time: 0,                  // 对局秒数
     pool: [], field: [], snakes: [],
@@ -88,6 +88,14 @@
   msg.className = 'sq-msg';
   msg.setAttribute('aria-hidden', 'true');
   frame.appendChild(msg);
+  /* 发完牌先停在这里，等玩家看完手牌再点它开始倒计时。 */
+  var readyBtn = document.createElement('button');
+  readyBtn.type = 'button';
+  readyBtn.className = 'sq-ready';
+  readyBtn.textContent = 'READY';
+  readyBtn.setAttribute('aria-label', '手牌已发好，点这里开始倒计时');
+  readyBtn.hidden = true;
+  frame.appendChild(readyBtn);
   var bar = document.createElement('div');
   bar.className = 'sq-bar';
   var barHead = document.createElement('div');
@@ -382,10 +390,10 @@
 
   function newGame() {
     var wall = E.makeWall(), at = 0;
-    game.phase = 'COUNTDOWN';
+    game.phase = 'READY';       // 先发牌、停在 READY，等玩家点中间的 READY 按钮才开始倒计时
     game.now = 0; game.time = 0; game.pool = []; game.field = [];
     game.snakes = []; game.winner = null; game.winners = []; game.huForm = '';
-    game.doubleHu = false; game.speed = 1; game.countdownEnd = COUNTDOWN_MS; game.overAt = 0;
+    game.doubleHu = false; game.speed = 1; game.countdownEnd = 0; game.overAt = 0;
     game.gold = GOLD_MS;
     flights = []; pendingDirs = []; viewing = 'player'; crashed = 0; barSig = '';
     flashUntil = 0; flashText = '';
@@ -420,7 +428,24 @@
     for (var i = 0; i < FIELD_TILES; i++) spawnFieldTile();
     markHazard();
     renderAll(true);
-    M.announce('新的一局开始，四条蛇各十三张牌', true);
+    M.announce('新的一局：十三张手牌已发好，看完点准备开始', true);
+  }
+
+  /* —— READY：牌已经发好，玩家看完手牌点中间的按钮才开始 3-2-1 倒计时 ——
+     这一段里棋盘完全不动（timers 不推进），四家状态牌仍可以点开看别人的手牌。 */
+  var readyShown = false;
+  function showReadyPrompt(on) {
+    if (on === readyShown) return;
+    readyShown = on;
+    readyBtn.hidden = !on;
+    if (on) readyBtn.focus({ preventScroll: true });
+  }
+  function beginCountdown() {
+    if (game.phase !== 'READY') return;
+    game.phase = 'COUNTDOWN';
+    game.countdownEnd = game.now + COUNTDOWN_MS;
+    showReadyPrompt(false);
+    M.announce('倒计时开始', true);
   }
 
   /* ============================================================
@@ -1113,10 +1138,11 @@
     flashUntil = game.now + ms;
   }
   function updateBanner() {
+    showReadyPrompt(game.phase === 'READY');
+    if (game.phase === 'READY') { showMsg(''); return; }
     if (game.phase === 'COUNTDOWN') {
       var left = game.countdownEnd - game.now;
-      var step = Math.ceil(left / 800);
-      showMsg(step > 3 ? 'READY' : String(step));
+      showMsg(String(Math.max(1, Math.ceil(left / 1000))));
       return;
     }
     if (game.phase === 'OVER') { showMsg('HU'); bannerClass('is-hu'); return; }
@@ -1170,6 +1196,7 @@
     if (!s || s.state !== 'DECISION') return;
     doDiscard(s, Number(button.dataset.index));
   });
+  readyBtn.addEventListener('click', beginCountdown);
   plates.addEventListener('click', function (event) {
     var button = event.target.closest('button[data-view]');
     if (!button) return;

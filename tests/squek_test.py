@@ -64,13 +64,22 @@ def hud_snapshot(page):
     raise AssertionError(('HUD 与对局状态不一致', snap))
 
 
+def start_round(page):
+    """点开始 / 再来一局之后牌会先发好停在 READY，要再点一次中间的准备按钮才进倒计时。"""
+    page.wait_for_function("App.squek.state().phase === 'READY'", timeout=15000)
+    page.locator('.sq-ready').click()
+    page.wait_for_function("App.squek.state().phase === 'PLAYING'", timeout=15000)
+
+
 def ensure_playing(page):
     """电脑也可能先胡牌结束对局；回归要继续跑就再开一局。"""
     page.wait_for_function("App.squek.state().phase !== 'MENU'", timeout=8000)
     if page.evaluate('App.squek.state().phase') == 'OVER':
         page.wait_for_selector('.overlay .choices button', timeout=10000)
         page.locator('.overlay .choices button').first.click()
-        page.wait_for_function("App.squek.state().phase === 'PLAYING'", timeout=15000)
+        start_round(page)
+    elif page.evaluate('App.squek.state().phase') == 'READY':
+        start_round(page)
     return page.evaluate('App.squek.state()')
 
 
@@ -94,7 +103,30 @@ with sync_playwright() as p:
     page.screenshot(path=str(OUT / '01-start.png'))
 
     page.locator('.overlay .choices button', has_text='开始游戏').click()
-    page.wait_for_function("App.squek.state().phase === 'PLAYING'", timeout=12000)
+
+    # 发牌阶段：牌已经发完、棋盘不动，玩家看完手牌点中间的 READY 才开始倒计时
+    page.wait_for_function("App.squek.state().phase === 'READY'", timeout=12000)
+    dealt = page.evaluate("""() => ({
+      st: App.squek.state(),
+      readyVisible: (() => { const b = document.querySelector('.sq-ready'); return !!b && !b.hidden; })(),
+      barTiles: document.querySelectorAll('.sq-tiles .sq-tile').length,
+      banner: document.querySelector('.sq-msg').textContent
+    })""")
+    assert dealt['readyVisible'], '发牌阶段中间要显示准备按钮'
+    assert dealt['banner'] == '', ('发牌阶段中央不该再显示横幅文字', dealt['banner'])
+    assert len(dealt['st']['field']) == 4, dealt['st']
+    assert all(s['tiles'] == 13 and len(s['body']) == 13 for s in dealt['st']['snakes']), dealt['st']
+    assert dealt['barTiles'] == 13, ('发牌阶段就该摊开自己的十三张手牌', dealt)
+    heads = [(s['head']['x'], s['head']['y']) for s in dealt['st']['snakes']]
+    page.wait_for_timeout(1200)
+    still = page.evaluate('App.squek.state()')
+    assert still['phase'] == 'READY', ('没点 READY 不该自己进倒计时', still['phase'])
+    assert still['time'] == 0, ('没点 READY 前对局不该开始计时', still['time'])
+    assert [(s['head']['x'], s['head']['y']) for s in still['snakes']] == heads, '没点 READY 前蛇不该移动'
+    page.screenshot(path=str(OUT / '01b-dealt.png'))
+    results.append(dict(case='ready', state=dealt['st']))
+
+    start_round(page)
 
     state = page.evaluate('App.squek.state()')
     assert len(state['snakes']) == 4, state
@@ -327,17 +359,18 @@ with sync_playwright() as p:
     if dialog.count():
         page.keyboard.press('Escape')
 
-    # 重新开始：确认后回到倒计时，牌张重新守恒
+    # 重新开始：确认后重新发牌停在 READY，牌张重新守恒
     page.locator('button[aria-controls="game-settings"]').click()
     page.locator('#btn-restart').click()
     if page.locator('dialog.game-confirm[open]').count():
         page.locator('dialog.game-confirm .btn.primary').click()
-    page.wait_for_function("App.squek.state().phase === 'COUNTDOWN' || App.squek.state().phase === 'PLAYING'", timeout=5000)
+    page.wait_for_function("App.squek.state().phase === 'READY'", timeout=8000)
     st = page.evaluate('App.squek.state()')
     assert len(st['field']) == 4, st
     assert all(x['tiles'] == 13 for x in st['snakes']), st
     assert sum(x['tiles'] for x in st['snakes']) + len(st['field']) + st['pool'] == 136, st
     results.append(dict(case='restart', state=st))
+    start_round(page)
 
     # 让它自己跑一会儿：三台电脑要能持续做出决策而不报错
     page.wait_for_timeout(6000)
@@ -350,7 +383,7 @@ with sync_playwright() as p:
     # 胡牌路径：注入一个「必定胡牌」的判定桩，验证胜利横幅、结算面板与战绩写入。
     page.goto(BASE + '/game/squek', wait_until='domcontentloaded')
     page.locator('.overlay .choices button', has_text='开始游戏').click()
-    page.wait_for_function("App.squek.state().phase === 'PLAYING'", timeout=15000)
+    start_round(page)
     page.evaluate("""() => {
       const real = SquekEngine.winForm;
       window.__squekRealWinForm = real;
@@ -383,7 +416,7 @@ with sync_playwright() as p:
 
     # 再来一局：牌张重新守恒
     page.locator('.overlay .choices button', has_text='再来一局').click()
-    page.wait_for_function("App.squek.state().phase === 'PLAYING'", timeout=15000)
+    start_round(page)
     st = page.evaluate('App.squek.state()')
     assert len(st['field']) == 4, st
     assert sum(x['tiles'] for x in st['snakes']) + len(st['field']) + st['pool'] == 136, st
@@ -411,7 +444,7 @@ with sync_playwright() as p:
         page.set_viewport_size(dict(width=width, height=height))
         page.goto(BASE + '/game/squek', wait_until='domcontentloaded')
         page.locator('.overlay .choices button', has_text='开始游戏').click()
-        page.wait_for_function("App.squek.state().phase === 'PLAYING'", timeout=15000)
+        start_round(page)
         st = page.evaluate('App.squek.state()')
         assert st['w'] >= 18 and st['h'] >= 18, ('棋盘任一边小于蛇身下限', width, height, st['w'], st['h'])
         assert st['cell'] >= 18, ('格子太小，牌面看不清', width, height, st['cell'])
@@ -425,4 +458,4 @@ with sync_playwright() as p:
     (OUT / 'report.json').write_text(json.dumps(dict(cases=results, errors=errors), ensure_ascii=False, indent=2))
     browser.close()
 
-print(f'PASS: 雀蛇回归 {len(results)} 个用例（开局、守恒、抢牌弃牌、观战、暂停、视口、设置、重开、胡牌结算、牌面贴图、棋盘尺寸）')
+print(f'PASS: 雀蛇回归 {len(results)} 个用例（发牌准备、开局、守恒、抢牌弃牌、观战、暂停、视口、设置、重开、胡牌结算、牌面贴图、棋盘尺寸）')
