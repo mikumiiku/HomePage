@@ -21,6 +21,9 @@
   - 通过 CSS mask 方式着色（参考 home.css 的 `.ti` / `.theme-toggle`，设置 `--icon: url(...)` 即可），不要引入整个字体包，不要用外链 CDN。
 - **游戏图标**使用 game-icons.net（CC BY 3.0，页脚已署名）：
   - SVG 放 `web/static/img/`，下载后必须删除自带的黑色底 `<path d="M0 0h512v512H0z"/>`（以及其它实心填充的背景圆），否则 CSS mask 会渲染成整块色。
+- **棋牌类贴图**（如雀蛇的麻将牌面）另找有明确开源许可的素材，放 `web/static/img/<游戏>/`，命名与出处写进同目录的 `<游戏>-SOURCES.md`：
+  - 雀蛇用 FluffyStuff 的 riichi-mahjong-tiles（CC0 1.0，无需署名），竖版 3:4，只取 34 种牌。
+  - 贴图在 canvas 里用 `drawImage` 画。**不要每帧直接贴 SVG**：光栅化开销会把帧率砍掉近一半（雀蛇实测 36 → 19 FPS），要按整数像素尺寸烘到离屏画布缓存，尺寸变化时整表作废。
 
 ## 亮暗模式
 

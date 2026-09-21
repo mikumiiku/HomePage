@@ -39,7 +39,7 @@ def steer_towards(page, state):
             continue
         dx, dy = DIRS[name]
         nx, ny = hx + dx, hy + dy
-        if 0 <= nx < 36 and 0 <= ny < 24 and (nx, ny) not in body:
+        if 0 <= nx < state['w'] and 0 <= ny < state['h'] and (nx, ny) not in body:
             return name
     return None
 
@@ -279,7 +279,7 @@ with sync_playwright() as p:
             if (dx and dx == -me['dir']['x']) or (dy and dy == -me['dir']['y']):
                 continue
             nx, ny = me['head']['x'] + dx, me['head']['y'] + dy
-            if 0 <= nx < 36 and 0 <= ny < 24:
+            if 0 <= nx < st['w'] and 0 <= ny < st['h']:
                 page.evaluate('App.squek.steer(%s)' % json.dumps(name))
                 page.wait_for_timeout(400)
                 after = next(s for s in page.evaluate('App.squek.state()')['snakes'] if s['id'] == 'player')
@@ -390,8 +390,39 @@ with sync_playwright() as p:
     page.evaluate('() => { SquekEngine.winForm = window.__squekRealWinForm; }')
     results.append(dict(case='after-win', state=st))
 
+    # 牌面贴图：34 张自托管麻将牌都要能加载。加载失败会静默退回占位画法，
+    # 界面上看不出异常，所以这里逐个 Image() 探一遍。
+    sheets = ['Man1', 'Man2', 'Man3', 'Man4', 'Man5', 'Man6', 'Man7', 'Man8', 'Man9',
+              'Pin1', 'Pin2', 'Pin3', 'Pin4', 'Pin5', 'Pin6', 'Pin7', 'Pin8', 'Pin9',
+              'Sou1', 'Sou2', 'Sou3', 'Sou4', 'Sou5', 'Sou6', 'Sou7', 'Sou8', 'Sou9',
+              'Ton', 'Nan', 'Shaa', 'Pei', 'Chun', 'Hatsu', 'Haku']
+    missing = page.evaluate("""(names) => Promise.all(names.map((n) => new Promise((done) => {
+      const im = new Image();
+      im.onload = () => done(im.naturalWidth ? null : n);
+      im.onerror = () => done(n);
+      im.src = '/static/img/squek/' + n + '.svg';
+    }))).then((r) => r.filter(Boolean))""", sheets)
+    assert not missing, ('牌面贴图加载失败', missing)
+    results.append(dict(case='tiles', count=len(sheets)))
+
+    # 棋盘格数按视口自适应：宽屏沿用 36×24，窄屏减格数把牌面撑到看得清。
+    # 格数在开局时定，所以每个视口都要重新开局。
+    for width, height, wide in [(1440, 900, True), (390, 844, False)]:
+        page.set_viewport_size(dict(width=width, height=height))
+        page.goto(BASE + '/game/squek', wait_until='domcontentloaded')
+        page.locator('.overlay .choices button', has_text='开始游戏').click()
+        page.wait_for_function("App.squek.state().phase === 'PLAYING'", timeout=15000)
+        st = page.evaluate('App.squek.state()')
+        assert st['w'] >= 18 and st['h'] >= 18, ('棋盘任一边小于蛇身下限', width, height, st['w'], st['h'])
+        assert st['cell'] >= 18, ('格子太小，牌面看不清', width, height, st['cell'])
+        if wide:
+            assert (st['w'], st['h']) == (36, 24), ('宽屏应当沿用 36×24', width, st['w'], st['h'])
+        else:
+            assert st['w'] < 36, ('窄屏应当减格数', width, st['w'])
+        results.append(dict(case='board', viewport=[width, height], w=st['w'], h=st['h'], cell=st['cell']))
+
     assert not errors, errors
     (OUT / 'report.json').write_text(json.dumps(dict(cases=results, errors=errors), ensure_ascii=False, indent=2))
     browser.close()
 
-print(f'PASS: 雀蛇回归 {len(results)} 个用例（开局、守恒、抢牌弃牌、观战、暂停、视口、设置、重开、胡牌结算）')
+print(f'PASS: 雀蛇回归 {len(results)} 个用例（开局、守恒、抢牌弃牌、观战、暂停、视口、设置、重开、胡牌结算、牌面贴图、棋盘尺寸）')

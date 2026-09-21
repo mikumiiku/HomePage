@@ -82,8 +82,8 @@ cd <项目目录> && go build -o bin/homepage .
 
 用户要求彻底移除 OpenWebUI，采用本站原生 JS + 自托管 Marked / DOMPurify，不引入 Node/Python 服务。调研参考 Anse 的浏览器本地对话存储：https://github.com/anse-app/anse 。Markdown 库与许可证见 web/static/vendor/chat/SOURCES.md。聊天专用 JS/CSS 与第三方运行库共约 110 KB（未压缩），仅打开 /home 时加载。
 
-- 首次使用打开左下角「设置」，填写 Base URL 和 API Key 后点击「连接」。浏览器请求该地址下的 `/models`，成功后保存连接并自动填充输入框下的模型列表，无需手填模型 ID。支持多组连接，重新连接可刷新模型列表。对话偏好可设置连接名称、系统提示词和温度。
-- 输入框下直接选择模型和思考等级（默认 / low / medium / high / xhigh / max）；明确选择等级时，通过 `reasoning_effort` 发给服务商，默认不发送此字段。支持情况取决于模型；参数错误时提示切回默认，不自动降级或重复请求。
+- 首次使用打开左下角「设置」，填写 Base URL 和 API Key 后点击「连接」。浏览器请求该地址下的 `/models`，成功后保存连接并自动填充输入框下的模型列表，无需手填模型 ID。支持多组连接，重新连接可刷新模型列表。对话偏好可设置连接名称、系统提示词和温度。侧栏默认收起，可从左上角菜单打开；输入框加号可进入设置或追加文本文件，语音只在浏览器支持设备端识别且已有中文语音包时可用。
+- 输入框右下直接选择模型，在设置中选择思考等级（默认 / low / medium / high / xhigh / max）；明确选择等级时，通过 `reasoning_effort` 发给服务商，默认不发送此字段。支持情况取决于模型；参数错误时提示切回默认，不自动降级或重复请求。
 - 支持 OpenAI 兼容 /chat/completions，浏览器直接发请求；接口需允许 CORS。没有本站代理回退，不自动同步、无账号登录。
 - app:chat 槽位存于用户 localStorage。密钥默认遮蔽，用户点击保存才持久化；对话/草稿自动保存在此浏览器，容量不足明确报错，另一标签页修改触发冲突保护。数据结构见 DATA_MODEL.md。
 - 流式 SSE 支持分包 UTF-8、停止保留部分回复、错误重试及上下文；非流式 JSON 回复也可接收。请求最长 3 分钟，模型列表读取最长 20 秒。
@@ -225,7 +225,7 @@ python3 tests/squek_test.py
 python3 tests/game_layout_test.py
 ```
 
-截图与状态快照输出到 `/tmp/squek-verification/`；游戏图标来源见 `web/static/img/squek-SOURCES.md`，验收记录见 `tests/SQUEK_VERIFICATION.md`。
+截图与状态快照输出到 `/tmp/squek-verification/`；游戏图标与牌面贴图来源见 `web/static/img/squek-SOURCES.md`，验收记录见 `tests/SQUEK_VERIFICATION.md`。
 
 
 ## 小游戏统一布局

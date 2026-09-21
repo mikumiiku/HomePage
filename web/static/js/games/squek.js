@@ -15,7 +15,12 @@
   var VER = new URL(document.currentScript.src).search;   // 静态资源指纹
 
   /* —— 规则常量 —— */
-  var W = 36, H = 24;                 // 地图格数
+  var BASE_W = 36, BASE_H = 24;       // 桌面棋盘格数
+  var CELL_KEEP = 17;                 // 格子不低于这个边长就沿用 36×24，不动棋盘
+  var CELL_TARGET = 22;               // 小屏重铺棋盘时想达到的格子边长
+  var BOARD_MIN_SIDE = 18;            // 棋盘任一边不得小于 BODY + 4；再小 pickSpawn 放不下身体
+  var AREA_MIN = 324, AREA_MAX = BASE_W * BASE_H;
+  var W = BASE_W, H = BASE_H;         // 当前对局的地图格数，开局由 chooseBoard 决定
   var BODY = 13;                      // 起手身长（= 手牌张数）
   var FIELD_TILES = 4;                // 场上常驻麻将数
   var BASE_STEP = 360;                // 毫秒 / 格
@@ -153,20 +158,44 @@
     return s === 'm' ? P.m : s === 'p' ? P.p : s === 's' ? P.s : P.z;
   }
 
-  function fit() {
-    /* 上方的状态牌与下方的手牌条各自独立占位，这里按剩余高度换算格子尺寸。
-       固定预留 30px：两处 8px 间距、页面底部内边距与棋盘 3px 边框。 */
+  /* 棋盘可用的区域：状态牌与手牌条各自占位后剩下的宽高。
+     固定预留 30px：两处 8px 间距、页面底部内边距与棋盘 3px 边框。 */
+  function availBox() {
     var availW = Math.max(80, wrap.clientWidth - 2);
     var stageTop = stage.getBoundingClientRect().top;
     var availH = window.innerHeight - stageTop - (plates.offsetHeight || 0) - (bar.offsetHeight || 0) - 30;
+    return { w: availW, h: Math.max(24, availH) };
+  }
+
+  /* —— 棋盘格数 ——
+     桌面与笔记本一律沿用 36×24：格子还看得清就没必要动棋盘，换形状只会改手感。
+     只有格子小到牌面看不清的小窗口与手机，才按可用区域的形状重新铺棋盘——
+     面积控制在 324-864 格之间，尽量把格子撑到 CELL_TARGET。
+     行列都不得小于 BOARD_MIN_SIDE：再小 pickSpawn 就放不下 13 节蛇身。
+     只开局时定一次——对局中 resize 只重算格子像素，不动格数。 */
+  function chooseBoard(availW, availH) {
+    /* 首屏脚本可能在布局完成前执行，尺寸不可信时先退回默认棋盘。 */
+    if (availW < 120 || availH < 120) { W = BASE_W; H = BASE_H; return; }
+    if (Math.min(availW / BASE_W, availH / BASE_H) >= CELL_KEEP) { W = BASE_W; H = BASE_H; return; }
+    var cap = function (avail) { return Math.max(BOARD_MIN_SIDE, Math.floor(avail / CELL_TARGET)); };
+    var wCap = cap(availW), hCap = cap(availH);
+    var area = Math.min(AREA_MAX, Math.max(AREA_MIN, wCap * hCap));
+    var h = Math.min(hCap, Math.max(BOARD_MIN_SIDE, Math.round(Math.sqrt(area / (availW / availH)))));
+    var w = Math.min(wCap, Math.max(BOARD_MIN_SIDE, Math.round(area / h)));
+    W = w; H = h;
+  }
+
+  function fit() {
+    var box = availBox();
+    var availW = box.w, availH = box.h;
     if (tilePx() !== lastTilePx) { lastTilePx = tilePx(); barSig = ''; }
-    var raw = Math.min(availW / W, Math.max(24, availH) / H);
-    var next = Math.max(5, Math.floor(raw));
+    var next = Math.max(5, Math.floor(Math.min(availW / W, availH / H)));
     var changed = next !== cell;
     cell = next;
     var px = cell * W, py = cell * H;
     ox = 0;
     var dpr = window.devicePixelRatio || 1;
+    if (changed || dpr !== dprScale) ART_SPRITES = {};   // 烘好的牌面按像素尺寸分桶，尺寸变了整表作废
     dprScale = dpr;
     canvas.width = px * dpr;
     canvas.height = py * dpr;
@@ -371,6 +400,13 @@
       });
       at += BODY;
     });
+    /* 格数按开局那一刻的可用区域定，之后整局不再变。状态牌与手牌条的高度
+       直接决定棋盘能占多少地方，所以先把 HUD 渲染出来、布局稳定后再定格数。 */
+    renderAll(true);
+    var box = availBox();
+    chooseBoard(box.w, box.h);
+    bgCache = null;          // 格数可能变了，底图按新尺寸由 fit() 重建
+    fit();
     game.snakes.forEach(function (s) {
       var spot = pickSpawn(6) || pickSpawn(3) || pickSpawn(1) || pickSpawn(0);
       if (!spot) return;
@@ -730,105 +766,57 @@
     return out;
   }
 
-  /* —— 牌面：矢量画法，数字牌完全不依赖字体 ——
-     筒 = 圆点阵（大点点成圆环），条 = 竹节，万 = 大号数字，字牌 = 大字/白板方框，
-     字牌在格子太小时改用拉丁首字母，任何尺寸都不会糊成一团。 */
-  var PIPS = {
-    1: [[.5, .5]],
-    2: [[.5, .3], [.5, .7]],
-    3: [[.26, .22], [.5, .5], [.74, .78]],
-    4: [[.3, .3], [.7, .3], [.3, .7], [.7, .7]],
-    5: [[.27, .27], [.73, .27], [.5, .5], [.27, .73], [.73, .73]],
-    6: [[.32, .2], [.68, .2], [.32, .5], [.68, .5], [.32, .8], [.68, .8]],
-    7: [[.28, .15], [.5, .28], [.72, .41], [.3, .7], [.7, .7], [.3, .9], [.7, .9]],
-    8: [[.32, .14], [.68, .14], [.32, .38], [.68, .38], [.32, .62], [.68, .62], [.32, .86], [.68, .86]],
-    9: [[.25, .25], [.5, .25], [.75, .25], [.25, .5], [.5, .5], [.75, .5], [.25, .75], [.5, .75], [.75, .75]]
-  };
-  var PIP_R = { 1: .3, 2: .19, 3: .16, 4: .155, 5: .145, 6: .125, 7: .105, 8: .11, 9: .105 };
-  var HONOR_CJK = ['东', '南', '西', '北', '中', '发', '白'];
-  var HONOR_LATIN = ['E', 'S', 'W', 'N', 'C', 'F', 'P'];
-
-  function honorColor(idx) {
-    if (idx === 4) return P.m;      // 中：红
-    if (idx === 5) return P.s;      // 发：绿
-    if (idx === 6) return P.p;      // 白：蓝
-    return P.line;                  // 风牌：墨色
+  /* —— 牌面：自托管麻将牌贴图（FluffyStuff/riichi-mahjong-tiles，CC0 1.0）——
+     贴图是竖版 3:4，方块格子里按 3:4 居中放置、左右留白；
+     kind 0-33 依次对应万、筒、条、东南西北中发白，与 SquekEngine 的排序一致。 */
+  var ART_NAMES = ['Man1', 'Man2', 'Man3', 'Man4', 'Man5', 'Man6', 'Man7', 'Man8', 'Man9',
+    'Pin1', 'Pin2', 'Pin3', 'Pin4', 'Pin5', 'Pin6', 'Pin7', 'Pin8', 'Pin9',
+    'Sou1', 'Sou2', 'Sou3', 'Sou4', 'Sou5', 'Sou6', 'Sou7', 'Sou8', 'Sou9',
+    'Ton', 'Nan', 'Shaa', 'Pei', 'Chun', 'Hatsu', 'Haku'];
+  var ART_RATIO = 0.75;               // 牌面宽高比（素材 viewBox 300×400）
+  var ART = ART_NAMES.map(function (name) {
+    var img = new Image();
+    img.onload = onArtLoad;
+    img.src = '/static/img/squek/' + name + '.svg' + VER;
+    return img;
+  });
+  /* 贴图到位后补一次重绘：手牌条里的小画布只在签名变化时重画，所以顺手清掉签名。 */
+  function onArtLoad() {
+    barSig = '';
+    draw(1);
   }
-  function roundRectPath(c, x, y, w, h, r) {
-    c.beginPath();
-    c.moveTo(x + r, y);
-    c.arcTo(x + w, y, x + w, y + h, r);
-    c.arcTo(x + w, y + h, x, y + h, r);
-    c.arcTo(x, y + h, x, y, r);
-    c.arcTo(x, y, x + w, y, r);
-    c.closePath();
+  /* SVG 每帧光栅化太贵（实测帧率腰斩），先按整数像素尺寸烘到离屏画布再贴。
+     尺寸只在 fit() 后变一次，飞牌动画的连续尺寸落在 0.3-1.0 倍格子之间，桶数有限；
+     格子尺寸变化时整表作废。 */
+  var ART_SPRITES = {};
+  function artSprite(kind, px) {
+    var key = kind + '@' + px;
+    var sprite = ART_SPRITES[key];
+    if (sprite) return sprite;
+    var dpr = dprScale || 1;
+    sprite = document.createElement('canvas');
+    sprite.width = Math.max(1, Math.round(px * ART_RATIO * dpr));
+    sprite.height = Math.max(1, Math.round(px * dpr));
+    sprite.getContext('2d').drawImage(ART[kind], 0, 0, sprite.width, sprite.height);
+    ART_SPRITES[key] = sprite;
+    return sprite;
   }
-  function drawPips(c, n, bx, by, bw, bh, color, stick) {
-    var layout = PIPS[n], u = Math.min(bw, bh);
-    for (var i = 0; i < layout.length; i++) {
-      var px = bx + layout[i][0] * bw, py = by + layout[i][1] * bh;
-      c.fillStyle = color;
-      if (stick) {
-        /* 竹节：细长胶囊 + 中间一道浅色节环，比纯色块更像条子。 */
-        var w = Math.max(1.5, u * (n <= 3 ? 0.19 : n <= 6 ? 0.15 : 0.125));
-        var h = Math.min(bh * (n <= 3 ? 0.34 : 0.26), w * 2.6);
-        roundRectPath(c, px - w / 2, py - h / 2, w, h, w / 2);
-        c.fill();
-        if (h >= 6 && w >= 3) {
-          c.fillStyle = P.face;
-          c.fillRect(px - w / 2, py - Math.max(0.5, h * 0.06), w, Math.max(1, h * 0.12));
-        }
-      } else {
-        var r = Math.max(1.4, u * PIP_R[n]);
-        c.beginPath(); c.arc(px, py, r, 0, Math.PI * 2); c.fill();
-        if (r >= 3.2) {           // 够大就抠出圆心，接近传统筒子
-          c.fillStyle = P.face;
-          c.beginPath(); c.arc(px, py, r * 0.42, 0, Math.PI * 2); c.fill();
-        }
-      }
-    }
+  function artReady(kind) {
+    var img = ART[kind];
+    return !!img && img.complete && img.naturalWidth > 0;
   }
-  function drawHonor(c, kind, bx, by, bw, bh) {
-    var idx = E.rankOf(kind) - 1;
-    if (idx === 6) {              // 白板：传统就是一块空白带框
-      var pad = Math.max(1.5, bw * 0.14);
-      c.strokeStyle = P.p;
-      c.lineWidth = Math.max(1.5, bw * 0.1);
-      c.strokeRect(bx + pad, by + pad, bw - pad * 2, bh - pad * 2);
-      return;
-    }
-    var big = bh >= 15;
-    var text = big ? HONOR_CJK[idx] : HONOR_LATIN[idx];
-    c.font = '800 ' + Math.round(bh * (big ? 0.78 : 0.88)) + 'px ' + P.font;
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.fillStyle = honorColor(idx);
-    c.fillText(text, bx + bw / 2, by + bh * 0.54);
-  }
-  /* 一张牌：象牙白底 + 花色条 + 花色图案。c 可以是棋盘 ctx，也可以是手牌条里的小画布。 */
+  /* 一张牌：贴图按 3:4 居中放进格子里。c 可以是棋盘 ctx，也可以是手牌条里的小画布。
+     贴图还没到位时画一块象牙白底加花色顶条占位，避免开局出现空网格。 */
   function paintTile(c, kind, x, y, size, alpha) {
     c.globalAlpha = alpha === undefined ? 1 : alpha;
-    var suit = E.suitOf(kind), rank = E.rankOf(kind);
-    c.fillStyle = P.face;
-    c.fillRect(x, y, size, size);
-    var strip = suitColor(kind);
-    var sh = Math.max(1.5, Math.round(size * 0.16));
-    c.fillStyle = strip;
-    c.fillRect(x, y, size, sh);
-    var bx = x + size * 0.1, by = y + sh + size * 0.05;
-    var bw = size * 0.8, bh = size - sh - size * 0.1;
-    if (suit === 'm') {
-      c.font = '800 ' + Math.max(7, Math.round(bh * 0.86)) + 'px ' + P.font;
-      c.textAlign = 'center';
-      c.textBaseline = 'middle';
-      c.fillStyle = strip;
-      c.fillText(String(rank), x + size / 2, by + bh * 0.53);
-    } else if (suit === 'p') {
-      drawPips(c, rank, bx, by, bw, bh, strip, false);
-    } else if (suit === 's') {
-      drawPips(c, rank, bx, by, bw, bh, strip, true);
+    if (artReady(kind)) {
+      var aw = size * ART_RATIO;
+      c.drawImage(artSprite(kind, Math.round(size)), x + (size - aw) / 2, y, aw, size);
     } else {
-      drawHonor(c, kind, bx, by, bw, bh);
+      c.fillStyle = P.face;
+      c.fillRect(x, y, size, size);
+      c.fillStyle = suitColor(kind);
+      c.fillRect(x, y, size, Math.max(1.5, Math.round(size * 0.16)));
     }
     c.globalAlpha = 1;
   }
@@ -1342,6 +1330,8 @@
   });
   window.addEventListener('resize', fit);
   new ResizeObserver(fit).observe(stage);
+  var firstBox = availBox();
+  chooseBoard(firstBox.w, firstBox.h);
   fit();
   renderHud();
   M.hud.best(save.best && save.best.wins ? '胡牌 ' + save.best.wins + ' 局' : '—');
@@ -1356,6 +1346,8 @@
         phase: game.phase, time: game.time, pool: game.pool.length, speed: game.speed,
         gold: game.gold, silver: SILVER_MS,
         stepMs: BASE_STEP,
+        w: W, h: H,
+        cell: cell,
         field: game.field.map(function (f) {
           return { x: f.x, y: f.y, tile: E.labelOfId(f.tile), name: E.fullNameOfId(f.tile) };
         }),
