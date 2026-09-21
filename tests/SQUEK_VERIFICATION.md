@@ -114,3 +114,9 @@
 - 播报改成「新的一局：十三张手牌已发好，看完点准备开始」，点按钮后播报「倒计时开始」。
 
 回归：`python3 tests/squek_test.py` 17 组通过（新增 ready 用例：`READY` 阶段中间显示准备按钮且中央无横幅文字、场上四张、四家各十三张且身体 13 节、手牌条已摊开十三张；停 1.2 秒后仍在 `READY`、`time` 仍为 0、四家蛇头坐标未变；点按钮后 3/2/1 → GO → PLAYING）。所有点「开始游戏 / 再来一局 / 重新开始」的地方都改成经 `start_round()`（等 `READY` → 点按钮 → 等 `PLAYING`）。`go test ./...`、`python3 tests/game_layout_test.py` 47 组通过；五档视口（1440×900 / 1024×768 / 390×844 / 320×568 / 844×390）实测按钮都在棋盘外框内、命中测试落在按钮上，pageerror 为 0。
+
+## 第六轮发布状态
+
+2026-09-21 用户授权后发布：提交 `d817302` 后编译，产物先落 `bin/homepage.new` 再 rename 换入 `bin/homepage`，发布前二进制备份在 `/tmp/homepage-before-round6`；重启走 `systemctl restart homepage-panel-launch`（第五轮记过的那条路，不用 `systemd-run` 临时单元）。
+
+发布后核对：8023 监听、新进程 PID 859150；`/healthz`、`/`、`/games/`、`/game/squek` 均 200；雀蛇四个资源带新指纹（1789981498）。线上浏览器冒烟（全新上下文，无本地存档）：点「开始游戏」后停在 `READY`，准备按钮可见、场上四张、牌库 80、四家各十三张且身体 13 节；停 1.2 秒后仍在 `READY` 且 `time` 为 0；点按钮后进 `PLAYING`，console 与 pageerror 为 0。
