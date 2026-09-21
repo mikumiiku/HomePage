@@ -93,3 +93,11 @@
 
 回归：`node tests/squek_engine_test.cjs` 10 项、`node tests/squek_ai_test.cjs` 9 项、`go test ./...` 通过；`python3 tests/squek_test.py` 16 组通过（新增「34 张贴图都能加载」与「宽屏沿用 36×24、窄屏减格数」两组），`python3 tests/game_layout_test.py` 47 组通过，console 与 pageerror 为 0。人工核对四档视口：1440×900（36×24，牌面高 20.8）、1024×768（36×24，16.0）、390×844（18×22，16.0）、320×568（18×18，9.6），棋盘居中不溢出，字牌东/南/西/北/中/发/白与万筒条都能认。
 
+
+## 第五轮发布状态
+
+2026-09-21 用户授权后发布：提交 `d81dc93` 后编译，产物先落到 `bin/homepage.new` 再 rename 换入 `bin/homepage`（运行中的旧进程持有旧 inode，直接覆盖会 ETXTBSY），发布前二进制备份在 `/tmp/homepage-before-round5`。
+
+**重启方式记一笔**：先用 `systemd-run --unit=... ` 起临时单元调面板的 `GoProjectControl('HomePage','restart')`，面板返回「重启成功」、新进程也打印了监听日志，但进程随该临时单元的 cgroup 一起被回收，8023 随即断开。改用 README 记录的 `systemctl restart homepage-panel-launch` 包装服务后恢复（新进程 PID 857108）。**以后发布直接用包装服务，不要用 systemd-run 临时单元调 restart。**
+
+发布后核对：`/healthz` 200；`/`、`/games/`、`/game/squek` 均 200；雀蛇四个资源带新指纹（1789980406）；抽查 `Ton.svg` / `Haku.svg` / `Sou1.svg` / `Man1.svg` 均 200。线上浏览器冒烟（全新上下文，无本地存档）：1440×900 棋盘 36×24、格子 26；390×844 棋盘 18×22、格子 20；34 张贴图全部加载，牌张守恒 136，console 与 pageerror 为 0。
