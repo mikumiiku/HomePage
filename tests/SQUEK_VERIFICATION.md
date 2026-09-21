@@ -153,3 +153,13 @@
 回归：`node tests/squek_engine_test.cjs` 22 项（新增 4 项：场风自风与符、明刻下四暗刻退成三暗刻+对对和、碰后门清限定役不成立且番数降到副露口径、无役不能和的 canWin 判定）；`node tests/squek_ai_test.cjs` 9 项（「两张废牌一视同仁」的对照牌从白板改成同花色的无对孤张——无役不能和之后白板本身成了役牌，不再等价）；`go test ./...` 通过；`python3 tests/squek_test.py` 21 组通过（新增自风、碰、无役不能和三组；碰的用例不靠自然撞运气，而是挑一种「玩家正好两张且某台电脑手里也有」的牌再把电脑弃牌锁到它）；`python3 tests/game_layout_test.py` 47 组通过。
 
 过程中抓到的两个真 bug：一是同一家能把同一种牌碰两次（`melds` 出现两个「南」），根因是候选条件写成「手里 ≥2 张」，碰完手里本来就剩三张，于是能再碰一次——改成「正好两张」；二是玩家点不碰之后电脑不会接着碰（`resolveClaim(null)` 直接把认领作废），补成 `resolveClaim(null, true)` 让电脑接着按顺序决定。
+
+## 第八轮发布状态
+
+2026-09-21 用户授权后发布：提交 `33bfea2` 后编译。**这次发布过程中发现工作树里有一批别人并行做的斗地主改动（未提交），而且斗地主已经由那边在 19:45 部署上线过**（`/game/doudizhu` 200、游戏列表里有它），所以「只发已提交内容」会让斗地主下线。经再次确认，改成直接用当前工作树编译（雀蛇新版 + 斗地主现状），两边都不掉线。
+
+- 产物先写 `bin/homepage.new` 再 rename 换入；发布前二进制备份在 `/tmp/homepage-before-round8`（即当时线上那份）。
+- **重启这次必须走两步**：直接 `systemctl restart homepage-panel-launch` 不会替换已经在跑的进程（`/proc/<pid>/exe` 指向被删除的 inode，说明还是旧二进制）。正确顺序是先调面板的 stop（`GoProjectControl('HomePage','stop')`，直接跑 python 一行命令，不要用 `systemd-run`），确认 8023 停了，再 `systemctl restart homepage-panel-launch` 起新进程。
+- 提交只包含本任务的文件：DESIGN.md 里我的那段与斗地主的段落是两个独立 hunk，用 `git apply --cached` 只暂存了自己那一块；README.md / schemas.js / games.go 等含别人改动的文件一律没动。
+
+发布后核对：8023 监听、新进程 PID 875877；`/healthz`、`/`、`/games/`、`/game/squek`、`/game/doudizhu` 均 200；雀蛇资源带新指纹（1789994126），线上 `squek.js` 里能取到 `ponCandidates` / `seatWind`、`squek-engine.js` 里能取到 `openKinds`。线上浏览器冒烟（全新上下文）：点开始后四家自风是东南西北各一个且标在状态牌上、开局说明含「东风局 / 碰 / 役」、点 READY 后正常进 PLAYING，console 与 pageerror 为 0。
