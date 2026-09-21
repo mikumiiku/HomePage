@@ -176,3 +176,9 @@
 - 调试快照 `state()` 补了 `field[].id` 与 `snakes[].handIds`（同一张牌的不同副本以前在快照里分不出来，没法精确断言）。
 
 验证：`python3 tests/squek_test.py` 21 组通过，弃牌用例新增两条断言——打出的那张 id 不在补场后的场上、场上不超过四张；「场上牌数 = 4 − 选牌中的蛇数」这条旧断言改成区间（碰不走场上，所以这个等式不再成立）。另用一次性脚本连续观察 6 次弃牌，刚打出的牌一次都没回到场上，牌张守恒 136。长跑 80 秒（强制电脑能碰就碰）确认碰仍正常、场上从不超过四张、无重复明刻、无 console 错误。`node tests/squek_engine_test.cjs` 22 项、`node tests/squek_ai_test.cjs` 9 项、`go test ./...`、`python3 tests/game_layout_test.py` 47 组全部通过。
+
+## 第九轮发布状态
+
+2026-09-21 用户授权后发布：`go build` 当前工作树（雀蛇修正 + 斗地主现状），产物先落 `bin/homepage.new` 再 rename 换入，发布前备份在 `/tmp/homepage-before-round9`。重启按上一轮总结的两步走：先面板 stop、确认 8023 不再监听，再 `systemctl restart homepage-panel-launch`——起出来的新进程 `/proc/<pid>/exe` 指向真实文件（不是 `(deleted)`），确认跑的就是盘上这份。
+
+发布后核对：8023 监听、新进程 PID 879531；`/healthz`、`/`、`/games/`、`/game/squek`、`/game/doudizhu` 均 200。线上浏览器冒烟（全新上下文）连打三张牌，**刚打出的那张一次都没回到场上**，场上张数始终不超过 4，console 与 pageerror 为 0。
